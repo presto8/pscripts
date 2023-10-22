@@ -1,0 +1,403 @@
+#!/usr/bin/env python
+"""pdrives by Preston Hunt <me@prestonhunt.com>
+
+A Python script that helps manage storage devices with such tasks as:
+    - List devices with device name, capacity, manufacturer, serial number
+    - Show failure or pre-failure indicators
+    - Run short and long self tests using the hard drive controller
+"""
+
+import argparse
+import enum
+import fnmatch
+import inspect
+import json
+import os
+import subprocess
+import sys
+import threading
+from typing import NamedTuple, Optional, Generator
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('query', nargs='*', help='search query')
+    parser.add_argument('--debug', action='store_true', help='show detailed debugging messages')
+    parser.add_argument('--raw', action='store_true', help='show raw smartctl output')
+    parser.add_argument('--full', action='store_true', help='show full drive details')
+    parser.add_argument('--test', action='store_true', help='start any needed tests')
+    parser.add_argument('--selftest-short-overdue-days', type=int, default=2, help='short selftest overdue after this many days')
+    parser.add_argument('--selftest-long-overdue-days', type=int, default=28, help='long selftest overdue after this many days')
+    return parser.parse_args()
+
+
+def main():
+    drives = []
+    analyses = []
+
+    for maybe_drive in get_drive_info_parallel():
+        drives.append(maybe_drive)
+        analysis = analyze_drive_info(maybe_drive)
+        analyses.append(analysis)
+        debug(maybe_drive, "->", analysis)
+
+    if ARGS.test:
+        for analysis in analyses:
+            devname = analysis.info.name
+            if 'short-selftest-overdue' in analysis.alerts:
+                run_smartctl(devname, "-t", "short")
+                analysis.print("started short-selftest")
+            elif 'long-selftest-overdue' in analysis.alerts or 'long-selftest-failed' in analysis.alerts:
+                run_smartctl(devname, "-t", "long")
+                analysis.print("started long-selftest")
+                start_keep_alive(analysis)
+    else:
+        display_status(analyses)
+
+
+def get_drive_info_parallel():
+    threads = []
+    for path in get_drive_paths():
+        if ARGS.query:
+            if not all([q in path for q in ARGS.query]):
+                continue
+        if ARGS.raw:
+            subprocess.run(["sudo", "smartctl", "-a", path])
+        debug(path, "getting info")
+        t = DriveInfoThread(path)
+        t.start()
+        threads += [t]
+
+    for t in threads:
+        t.join()
+
+    return [t.result for t in threads if t.result]
+
+
+def debug(*args, **kwargs):
+    if ARGS.debug:
+        caller = inspect.stack()[1]
+        print('<{}:{}>'.format(caller.function, caller.lineno), *args, **kwargs)
+
+
+class SelftestLog(NamedTuple):
+    short_last_hours: int
+    short_last_passed: bool
+    long_last_hours: int
+    long_last_passed: bool
+
+
+class AtaSelfTest(NamedTuple):
+    status: int
+    polling_minutes_extended: int
+    log: Optional[SelftestLog]
+    remaining_percent: int
+
+
+class NvmHealth(NamedTuple):
+    available_spare: int
+
+
+class DriveInfo(NamedTuple):
+    name: str
+    model: str
+    serial: str
+    capacity_bytes: int
+    hours: int
+    temp_c: int
+    failing_smart_attributes: list[str]
+    partitions: list[str]
+    labels: list[str]
+    fstypes: list[str]
+    selftest: Optional[AtaSelfTest]
+    nvmhealth: Optional[NvmHealth]
+
+
+class DriveAnalysis(NamedTuple):
+    info: DriveInfo
+    years: float
+    tb: float
+    alerts: list[str]
+    status: str
+    flag: str
+
+    def print(self, *args):
+        print(self.info.name, *args)
+
+
+class DriveStatus(enum.Enum):
+    ok = 0
+    warn = 1
+    degraded = 2
+    critical = 3
+    failing = 4
+
+
+def format_status(d: DriveInfo, alerts: str) -> str:
+    if alerts:
+        return "DEGRADED"
+    return "ok"
+
+
+def format_alert(d: DriveInfo) -> str:
+    def overdue(earlier, max_hours):
+        return (d.hours - earlier) > max_hours
+
+    alerts = d.failing_smart_attributes
+
+    if d.selftest:
+        st = d.selftest.log
+
+        if d.selftest.status > 240:
+            remaining = d.selftest.remaining_percent
+            alerts += [f"selftest-running {remaining}%-remaining"]
+        elif st is None:
+            alerts += ["short-selftest-overdue"]
+        elif overdue(st.short_last_hours, ARGS.selftest_short_overdue_days * 24):
+            alerts += ["short-selftest-overdue"]
+        elif not st.short_last_passed:
+            alerts += ["short-selftest-failed"]
+        elif overdue(st.long_last_hours, ARGS.selftest_long_overdue_days * 24):
+            alerts += ["long-selftest-overdue"]
+        elif not st.long_last_passed:
+            alerts += ["long-selftest-failed"]
+
+    if d.nvmhealth:
+        if d.nvmhealth.available_spare < 100:
+            alerts += ["available-spare-{d.nvmhealth.available_spare}%"]
+
+    return " ".join(alerts)
+
+
+def print_table(header: dict, data: [dict]):
+    """The keys of `header` are the columns, in order. The column width is
+    automatically adjusted to fit the contents."""
+
+    col_widths = {k: [len(v)] for k, v in header.items()}
+    for colname in header.keys():
+        col_widths[colname] += [len(row[colname]) for row in data]
+
+    templ_parts = []
+    for colname, widths in col_widths.items():
+        part = f"{colname}:<{max(widths)}"
+        templ_parts.append("{" + part + "}")
+
+    templ = "  ".join(templ_parts)
+    print(templ.format(**header))
+    for row in data:
+        print(templ.format(**row))
+
+
+def print_drives(analyses: list[DriveAnalysis]) -> None:
+    header = dict(flag="FLAG", status="STATUS", name="NAME", model="MODEL", serial="SERIAL", years="YEARS", tb="TB", labels="LABELS", fstypes="FSTYPE", alerts="ALERTS")
+
+    rows = []
+    for analysis in analyses:
+        d = analysis.info._asdict()
+        a = analysis._asdict()
+        row = {**d, **a}
+
+        if not ARGS.full:
+            row['model'] = row['model'].split()[0]
+
+        rows.append(row)
+
+    print_table(header, rows)
+
+
+def get_smart_attribute(j, attr):
+    for x in j['ata_smart_attributes']['table']:
+        if x['name'] == attr:
+            return x['value']
+    return None
+
+
+def get_failing_smart_attributes(j) -> list[str]:
+    # SMART attributes have value, worst, thresh, and raw. Unfortuantely it's
+    # almost in possible to make any sense of these numbers. So we pick a few
+    # and ignore the rest.
+
+    try:
+        table = j['ata_smart_attributes']['table']
+    except KeyError:
+        return []
+
+    result: list[str] = []
+    for attr in table:
+        if attr['id'] == 197:  # current pending sector - any number is bad
+            raw =  attr['raw']['value']
+            if raw > 0:
+                result.append(f"{raw}-pending-sectors")
+    return result
+
+
+def analyze_drive_info(drive: DriveInfo) -> DriveAnalysis:
+    result = {}
+    result['info'] = drive
+    result['years'] = "{:.1f}".format(drive.hours / (24 * 365.25))
+    result['tb'] = "{:.1f}".format(drive.capacity_bytes / 1000**4)
+    result['alerts'] = format_alert(drive)
+    result['status'] = format_status(drive, result['alerts'])
+    result['flag'] = '!' if result['status'] != 'ok' else ''
+    return DriveAnalysis(**result)
+
+
+def display_status(analyses: list[DriveAnalysis]):
+    analyses.sort(key=lambda x: x.info.hours, reverse=True)
+    print_drives(analyses)
+
+
+class DriveInfoThread(threading.Thread):
+    def __init__(self, drivepath):
+        debug("DriveInfoThread:", drivepath)
+        self.drivepath = drivepath
+        super().__init__()
+
+    def run(self):
+        self.result = get_drive_info(self.drivepath)
+
+
+def get_drive_info(drivepath) -> Optional[DriveInfo]:
+    j = run_smartctl("-a", drivepath, "-T", "permissive")
+
+    if j['smartctl']['exit_status'] & 0x2:
+        print(f"{drivepath}: unable to get SMART info")
+        return None
+
+    if ARGS.debug:
+        print(json.dumps(j, indent=4))
+
+    result = dict(name=drivepath)
+
+    result['model'] = j.get('model_family', j.get('model_name', 'Unknown'))
+    try:
+        result['serial'] = j['serial_number']
+    except KeyError:
+        return None
+
+    result['capacity_bytes'] = j['user_capacity']['bytes']
+    result['hours'] = j['power_on_time']['hours']
+    result['temp_c'] = j['temperature']['current']
+    result['failing_smart_attributes'] = get_failing_smart_attributes(j)
+
+    result['selftest'] = get_selftest(j)
+    result['nvmhealth'] = get_nvmhealth(j)
+    result['partitions'] = j2 = run_lsblk(drivepath)
+
+    try:
+        children = j2['blockdevices'][0]['children']
+    except KeyError:
+        children = []
+    result['labels'] = " ".join([child['label'] for child in children if child['label']])
+    result['fstypes'] = " ".join([child['fstype'] for child in children if child['fstype']]).replace("_member", "")
+    result['partitions'] = [child['name'] for child in children]
+
+    return DriveInfo(**result)
+
+
+def get_selftest(j) -> Optional[AtaSelfTest]:
+    try:
+        self_test = j['ata_smart_data']['self_test']
+    except KeyError:
+        return None
+
+    result = {}
+    result['status'] = self_test['status']['value']
+    result['polling_minutes_extended'] = self_test['polling_minutes']['extended']
+    result['remaining_percent'] = self_test['status'].get('remaining_percent', 0)
+    result['log'] = parse_selftest_log(j)
+
+    return AtaSelfTest(**result)
+
+
+def parse_selftest_log(j) -> Optional[SelftestLog]:
+    try:
+        table = j['ata_smart_self_test_log']['standard']['table']
+    except KeyError:
+        return None
+
+    def hours(x):
+        drive_hours = j['power_on_time']['hours']
+        if x != 0 and drive_hours >= 65536 and x < 65536:
+            return x + 65536
+        return x
+
+    short = [0, False]
+    long = [0, False]
+
+    for x in table:
+        dest = short if x['type']['value'] == 1 else long
+        if dest[0] == 0:
+            try:
+                dest[0] = x['lifetime_hours']
+                dest[1] = x['status']['passed']
+            except KeyError:
+                pass
+
+    try:
+        return SelftestLog(short_last_hours=hours(short[0]), short_last_passed=short[1],
+                           long_last_hours=hours(long[0]), long_last_passed=long[1])
+    except IndexError:
+        return None
+
+
+def get_nvmhealth(j) -> Optional[NvmHealth]:
+    try:
+        nh = j['nvme_smart_health_information_log']
+    except KeyError:
+        return None
+
+    result = {}
+    result['available_spare'] = nh['available_spare']
+
+    return NvmHealth(**result)
+
+
+def run_smartctl(*args):
+    cmd = ["sudo", "smartctl", "--json", *args]
+    result = subprocess.run(cmd, capture_output=True)
+    return json.loads(result.stdout)
+
+
+def run_lsblk(*args):
+    result = subprocess.run(["sudo", "lsblk", "--json", "--output", "name,label,fstype", *args], capture_output=True)
+    return json.loads(result.stdout)
+
+
+def get_drive_paths() -> Generator[str, None, None]:
+    for file in os.listdir('/dev'):
+        if fnmatch.fnmatch(file, 'sd?'):
+            yield '/dev/' + file
+        if fnmatch.fnmatch(file, 'nvme?n?'):
+            yield '/dev/' + file
+
+
+def start_keep_alive(analysis):
+    devname = analysis.info.name
+    partition = analysis.info.partitions[0]
+    cmd = ["bash", "-x", "-c", f"""
+    while sleep 60s; do
+        if ! sudo smartctl -a {devname} | grep 'of test remaining'; then
+            break
+        fi
+        sudo dd if=/dev/{partition} iflag=direct count=1 of=/dev/null
+    done
+    """]
+    logfp = open(f"/tmp/pdrives-keepalive-{partition}", "w")
+    subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
+    analysis.print("started background keep-alive")
+
+
+class Fail(Exception):
+    pass
+
+
+if __name__ == '__main__':
+    try:
+        ARGS = parse_args()
+        main()
+    except Fail as f:
+        print(*f.args, file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Ctrl+C")
