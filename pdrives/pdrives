@@ -16,7 +16,7 @@ import os
 import subprocess
 import sys
 import threading
-from typing import NamedTuple, Optional, Generator
+from typing import NamedTuple, Generator
 
 
 def parse_args():
@@ -90,7 +90,7 @@ class SelftestLog(NamedTuple):
 class AtaSelfTest(NamedTuple):
     status: int
     polling_minutes_extended: int
-    log: Optional[SelftestLog]
+    log: SelftestLog | None
     remaining_percent: int
 
 
@@ -109,8 +109,8 @@ class DriveInfo(NamedTuple):
     partitions: list[str]
     labels: list[str]
     fstypes: list[str]
-    selftest: Optional[AtaSelfTest]
-    nvmhealth: Optional[NvmHealth]
+    selftest: AtaSelfTest | None
+    nvmhealth: NvmHealth | None
 
 
 class DriveAnalysis(NamedTuple):
@@ -257,7 +257,7 @@ class DriveInfoThread(threading.Thread):
         self.result = get_drive_info(self.drivepath)
 
 
-def get_drive_info(drivepath) -> Optional[DriveInfo]:
+def get_drive_info(drivepath) -> DriveInfo | None:
     j = run_smartctl("-a", drivepath, "-T", "permissive")
 
     if j['smartctl']['exit_status'] & 0x2:
@@ -295,7 +295,7 @@ def get_drive_info(drivepath) -> Optional[DriveInfo]:
     return DriveInfo(**result)
 
 
-def get_selftest(j) -> Optional[AtaSelfTest]:
+def get_selftest(j) -> AtaSelfTest | None:
     try:
         self_test = j['ata_smart_data']['self_test']
     except KeyError:
@@ -310,7 +310,7 @@ def get_selftest(j) -> Optional[AtaSelfTest]:
     return AtaSelfTest(**result)
 
 
-def parse_selftest_log(j) -> Optional[SelftestLog]:
+def parse_selftest_log(j) -> SelftestLog | None:
     try:
         table = j['ata_smart_self_test_log']['standard']['table']
     except KeyError:
@@ -341,7 +341,7 @@ def parse_selftest_log(j) -> Optional[SelftestLog]:
         return None
 
 
-def get_nvmhealth(j) -> Optional[NvmHealth]:
+def get_nvmhealth(j) -> NvmHealth | None:
     try:
         nh = j['nvme_smart_health_information_log']
     except KeyError:
