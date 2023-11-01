@@ -1,0 +1,201 @@
+#!/usr/bin/env python
+"""
+pmove by Preston Hunt <me@prestonhunt.com>
+
+Helper script to reduce risks in moving files.
+- Ensure that backup path does not exist, to avoid overwriting files.
+- Ensure that source path does not contain immutable files
+- Ensure that user has permission to move the files
+- Ensure that backup path has enough space
+- Create hash of source path
+- Copy files to dest path using rsync
+- Verify hash of dest path
+- Remove source path
+"""
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('from_paths', nargs='+', help='source path to move')
+    parser.add_argument('to_path', help='destination path')
+    parser.add_argument('--verbose', default=False, action='store_true', help='show more detailed messages')
+    return parser.parse_args()
+
+
+def main():
+    remote = None
+    if ':' in ARGS.to_path:
+        remote, _, to_path = ARGS.to_path.partition(':')
+    else:
+        to_path = os.path.abspath(ARGS.to_path)
+
+    for from_path in ARGS.from_paths:
+        from_path = os.path.abspath(from_path)
+        safe_move(from_path, remote, to_path)
+
+
+@dataclass
+class PmovePath:
+    host: str
+    abspath: str
+    nixhash: str = ""
+
+
+def path_to_PmovePath(path: str) -> PmovePath:
+    host = "localhost"
+    if ':' in path:
+        host, _, path = path.partition(':')
+        abspath = "TODO"
+    else:
+        abspath = os.path.abspath(path)
+    return PmovePath(host=host, abspath=abspath)
+
+
+def safe_move(from_path, remote, to_path):
+    remote_fmt = f"{remote}:" if remote else ""
+    print(f":: {from_path} -> {remote_fmt}{to_path}")
+
+    check_path_exists(from_path)
+    check_path_exists(to_path)
+    dest_path = get_destpath(from_path, to_path)
+    print(f"   :: destination path is {dest_path}")
+    print("   :: destination path does not already exist")
+
+    fail_if_immut(from_path)
+    bytes_needed = fail_if_no_permissions(from_path)
+    fail_if_not_enough_space(bytes_needed, to_path)
+
+    from_hashdir = get_nixhash(from_path)
+    rsync_files(from_path, to_path)
+
+    to_hashdir = get_nixhash(dest_path)
+
+    if from_hashdir != to_hashdir:
+        raise Fail(f"hashdir does not match! {from_hashdir} != {to_hashdir}")
+
+    print(f"   :: hashes match, removing files from {from_path}")
+    remove_files(from_path, to_path)
+
+    print(f"   :: success: {from_path} -> {dest_path}")
+
+
+def fail_if_immut(path):
+    print("   :: checking for immutable files")
+    result = run(["find", path, "-exec", "lsattr", "-d", "{}", ";"])
+    found = False
+    for entry in result.stdout.split("\n"):
+        attr, _, relpath = entry.partition(" ")
+        if "i" in attr:
+            print("\t" + entry)
+            found = True
+
+    if found:
+        raise Fail("!! aborting due to immutable files")
+
+
+def fail_if_no_permissions(path) -> int:
+    print("   :: checking for file access permissions")
+    total_bytes = 0
+    for entry in scantree(path):
+        if not os.access(entry, os.R_OK | os.W_OK) and not entry.is_symlink():
+            raise Fail(f"don't have read/write access to {entry}")
+        pathstat = entry.stat(follow_symlinks=False)
+        total_bytes += pathstat.st_size
+    print(f"   :: {total_bytes:,} bytes to move")
+    return total_bytes
+
+
+def fail_if_not_enough_space(bytes_needed, path):
+    total, used, free = shutil.disk_usage(path)
+    if free < bytes_needed + 10000:  # add a pad to account for filesystem meta data
+        raise Fail(f"need {bytes_needed:,} bytes but {path} only has {free:,}")
+    print(f"   :: {path} has enough free space: {free:,} bytes free")
+
+
+def remove_files(from_path, to_path):
+    result = run(["rsync", "-a", "--info=name", from_path, to_path, "--remove-source-files"])
+    if result.stdout != '':
+        raise Fail(result)
+    if os.path.isdir(from_path):
+        # remove empty directories left behind by rsync
+        run(["find", from_path, "-type", "d", "-empty", "-delete"])
+
+
+def check_path_exists(path):
+    # "ls" the path to wake up any sleeping NFS mounts
+    # See https://stackoverflow.com/questions/21292365/python-os-path-exists-failing-for-nfs-mounted-directory-file-that-exists
+    subprocess.run(["ls", path], capture_output=True)
+    if not os.path.exists(path):
+        raise Fail(f"path does not exist: {path}")
+
+
+def get_destpath(from_path, to_path):
+    from_base = os.path.basename(from_path)
+    dest_path = os.path.join(to_path, from_base)
+    if os.path.exists(dest_path):
+        raise Fail(f"!! not clobbering existing path: {dest_path}")
+    return dest_path
+
+
+def run(*args, **kwargs):
+    result = subprocess.run(*args, **kwargs, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise Fail(result)
+    return result
+
+
+def get_nixhash(path):
+    print(f"   :: getting nix-hash for: {path}")
+
+    result = run(["nix-hash", path])
+    parts = result.stdout.split()
+    hashresult = parts[0]
+    print(f"   :: {hashresult}")
+
+    if len(hashresult) != 32:
+        raise Fail(f"unexpected hashdir: {hashresult}")
+
+    return hashresult
+
+
+def rsync_files(from_path, to_path):
+    print("   :: copying files")
+    run(["rsync", "-av", from_path, to_path])
+
+
+def scantree(path, follow_symlinks=False):  # generator that yields a Path
+    try:
+        for entry in os.scandir(path):
+            if entry.is_dir(follow_symlinks=follow_symlinks):
+                yield from scantree(entry.path, follow_symlinks=follow_symlinks)
+            else:
+                yield Path(entry)
+    except NotADirectoryError:
+        yield Path(path)
+
+
+def get_remote_abspath(remote, path):
+    pass
+
+
+class Fail(Exception):
+    pass
+
+
+if __name__ == '__main__':
+    try:
+        ARGS = parse_args()
+        main()
+    except Fail as f:
+        print(*f.args, file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Ctrl+C")
