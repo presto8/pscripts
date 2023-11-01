@@ -1,0 +1,16 @@
+= pscripts
+
+pscripts is a collection of helpful scripts. They are written in bash or
+python.
+
+[cols="1,1"]
+|===
+|https://github.com/presto8/pscripts/tree/main/pdrives[pdrives]
+|Helps manage storage devices
+
+|https://github.com/presto8/pscripts/tree/main/pnix[pnix]
+|Wrapper script for NixOS operations.
+
+|https://github.com/presto8/pscripts/tree/main/pmove[pmove]
+|Helper script to reduce risks in moving files.
+|===
