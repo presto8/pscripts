@@ -1,0 +1,24 @@
+= lastf
+
+A bash script that finds the last file modified in the directory (does not
+recurse into subdirs) and prints the filename
+
+== Examples
+
+=== Show last file in Downloads
+
+....
+$ lastf ~/Downloads
+
+/home/foo/Downloads/nixos-minimal-23.05.4705.621f51253edf-x86_64-linux.iso
+....
+
+=== Move last file from Downloads to current directory
+
+....
+$ cd /tmp
+$ mv -v "$(lastf ~/Downloads)" .
+
+copied '/home/foo/Downloads/nixos-minimal-23.05.4705.621f51253edf-x86_64-linux.iso' -> './nixos-minimal-23.05.4705.621f51253edf-x86_64-linux.iso'
+removed '/home/foo/Downloads/nixos-minimal-23.05.4705.621f51253edf-x86_64-linux.iso'
+....

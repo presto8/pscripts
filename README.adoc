@@ -5,6 +5,9 @@ python.
 
 [cols="1,1"]
 |===
+|https://github.com/presto8/pscripts/tree/main/lastf[lastf]
+|Finds the last modified file in a directory.
+
 |https://github.com/presto8/pscripts/tree/main/pdrives[pdrives]
 |Helps manage storage devices
 

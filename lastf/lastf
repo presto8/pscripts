@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# lastf by Preston Hunt <me@prestonhunt.com>
+# 
+# Usage: lastf <dir>
+#   <dir>  directory to search (current directory by default)
+
+# Finds the last file modified in the directory (does not recurse into subdirs)
+# and prints the filename
+
+find "${1:-.}" -mindepth 1 -maxdepth 1 -type f -printf '%T+ %p\n' | sort -r | head -n 1 | cut -f1 -d" " --complement
