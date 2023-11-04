@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+# psg by Preston Hunt <me@prestonhunt.com>
+#
+# Runs ps and then shows only entries matching all of the provided search
+# terms.
+#
+# Usage: psg [term1] [term2] ...
+
+set -Eeu -o pipefail
+
+reduce() {
+    if [[ $* ]]; then
+        grep -Fi "$@"
+    else
+        cat
+    fi
+}
+
+ps -eo 'pid command' | reduce "$@" |
+  grep -Fv "${BASH_SOURCE[0]}" |
+  grep -Fv "grep -Fi $*" |
+  GREP_COLORS='mt=00;35' grep -E --colour=auto '^\s*[[:digit:]]+'
+

@@ -1,0 +1,11 @@
+= psg
+
+Runs ps and then shows only entries matching all of the provided search terms.
+
+== Example
+
+....
+$ psg avahi
+
+1842 avahi-daemon: running [mylaptop.local]
+....

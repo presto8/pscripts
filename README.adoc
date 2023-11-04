@@ -18,4 +18,7 @@ python.
 |https://github.com/presto8/pscripts/tree/main/pnix[pnix]
 |Wrapper script for NixOS operations.
 
+|https://github.com/presto8/pscripts/tree/main/psg[psg]
+|Shows processes matching search terms.
+
 |===
