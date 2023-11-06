@@ -10,3 +10,24 @@ Helper script to reduce risks in moving files.
 - Copy files to dest path using rsync
 - Verify hash of dest path
 - Remove source path
+
+== Example
+
+....
+$ pmove icloud-1106 /barn/inbox
+
+:: /home/foo/Downloads/icloud-1106 -> /barn/inbox
+   :: destination path is /barn/inbox/icloud-1106
+   :: destination path does not already exist
+   :: checking for immutable files
+   :: checking for file access permissions
+   :: 12,656,727,529 bytes to move
+   :: /barn/inbox has enough free space: 102,194,216,960 bytes free
+   :: getting nix-hash for: /home/foo/Downloads/icloud-1106
+   :: 2e504f6f7f0a066e452fa9d469690f61
+   :: copying files
+   :: getting nix-hash for: /barn/inbox/icloud-1106
+   :: 2e504f6f7f0a066e452fa9d469690f61
+   :: hashes match, removing files from /home/foo/Downloads/icloud-1106
+   :: success: /home/foo/Downloads/icloud-1106 -> /barn/inbox/icloud-1106
+....
