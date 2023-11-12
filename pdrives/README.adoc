@@ -8,11 +8,13 @@ A Python script that helps manage storage devices with such tasks as:
 
 == Example output
 
+
 ....
-FLAG  STATUS  NAME          MODEL                 SERIAL            YEARS  TB    LABELS             FSTYPE    ALERTS
-      ok      /dev/sdd      HGST                  PL1331LAGZ1LLH    7.1    4.0   sloop              zfs
-      ok      /dev/nvme1n1  INTEL                 BTPY631506PG256D  5.1    0.3   GLADOSBOOT glados  vfat zfs
-      ok      /dev/sde      Hitachi/HGST          PCGHJVAS          2.4    4.0   sloop              zfs
-      ok      /dev/sdg      ST16000NM000G-2KH103  ZL2CBGD4          0.6    16.0  kuss_a1            zfs
-      ok      /dev/nvme0n1  SPCC                  230064985160335   0.0    2.0   cutter             zfs
+FLAG  STATUS    NAME          MODEL                 SERIAL            YEARS  TB    LABELS             FSTYPE    ALERTS
+      ok        /dev/nvme1n1  INTEL                 BTPY631506PG256D  5.1    0.3   GLADOSBOOT glados  vfat zfs
+!     DEGRADED  /dev/sdd      Seagate               ZCT0P92A          4.5    8.0   tank               ext4      16-pending-sectors
+      ok        /dev/sde      Hitachi/HGST          PCGHJVAS          2.4    4.0   sloop              zfs
+!     DEGRADED  /dev/sdd      Seagate               WCT04DT3          1.4    8.0   jupiter            zfs       long-selftest-overdue
+      ok        /dev/sdg      ST16000NM000G-2KH103  ZL2CBGD4          0.6    16.0  kuss_a1            zfs
+      ok        /dev/nvme0n1  SPCC                  230064985160335   0.0    2.0   cutter             zfs
 ....
