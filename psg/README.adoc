@@ -1,4 +1,4 @@
-= psg
+= psg (ps grep)
 
 Runs ps and then shows only entries matching all of the provided search terms.
 
