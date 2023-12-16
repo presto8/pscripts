@@ -135,6 +135,8 @@ class DriveStatus(enum.Enum):
 
 def format_status(d: DriveInfo, alerts: str) -> str:
     if alerts:
+        if "pending-sectors" in alerts:
+            return "FAILING"
         return "DEGRADED"
     return "ok"
 
