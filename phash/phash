@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+# phash by Preston Hunt <me@prestonhunt.com>
+#
+# Computes the hashdir for each path provided.
+# See https://github.com/presto8/hashdir
+#
+# Usage: phash [path1] [path2] ...
+
+set -Eeu -o pipefail
+
+main() {
+    for path in "$@"; do
+        hashdir_path "$path"
+    done
+}
+
+hashdir_path() {
+    if hash=$(get_hashes "$1" | sort | sha256sum | cut -c1-8); then
+        echo "$hash  $(realpath "$1")"
+    fi
+}
+
+error() { echo >&2 "!! $*"; }
+
+get_hashes() (
+    if ! cd "$1" &>/dev/null; then
+        error "unable to open directory: $1"
+        return 1
+    fi
+
+    find . '(' -type f -o -type l ')' | while read -r path; do
+        if [[ -L $path ]]; then
+            # need the hack below otherwise readlink will echo a newline
+            readlink -n "$path" | sha256sum | awk "{ print \$1 \"  $path\"}"
+        else
+            sha256sum "$path"
+        fi
+    done
+)
+
+main "$@"

@@ -1,0 +1,17 @@
+= phash
+
+Create a hash value (based on SHA-256) of a path.
+
+== Example
+
+....
+a=$(mktemp -d)
+cd "$a"
+for i in {1..10}; do echo "hello $i" >$i; done
+b=$(mktemp -d)
+rsync -av . "$b"
+phash "$a" "$b"
+
+3bfe659c  /tmp/tmp.VtxTGhL9gt
+3bfe659c  /tmp/tmp.2lXofPNJvj
+....
