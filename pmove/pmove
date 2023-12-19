@@ -69,7 +69,7 @@ def safe_move(from_path, remote, to_path):
     check_path_exists(from_path)
     check_path_exists(to_path)
     dest_path = get_destpath(from_path, to_path)
-    print(f"   :: destination does not already exist: {dest_path}")
+    print(f"   :: destination doesn't exist: {dest_path}")
 
     fail_if_immut(from_path)
 
