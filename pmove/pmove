@@ -69,8 +69,7 @@ def safe_move(from_path, remote, to_path):
     check_path_exists(from_path)
     check_path_exists(to_path)
     dest_path = get_destpath(from_path, to_path)
-    print(f"   :: destination path is {dest_path}")
-    print("   :: destination path does not already exist")
+    print(f"   :: destination does not already exist: {dest_path}")
 
     fail_if_immut(from_path)
 
@@ -99,7 +98,7 @@ def hash_and_rsync(from_path, dest_path):
     to_hashdir = get_nixhash(dest_path)
 
     if from_hashdir != to_hashdir:
-        raise Fail(f"hashdir does not match! {from_hashdir} != {to_hashdir}")
+        raise Fail(f"hashes do not match! {from_hashdir} != {to_hashdir}")
 
     print(f"   :: hashes match, removing files from {from_path}")
     remove_files(from_path, to_path)
