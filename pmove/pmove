@@ -78,7 +78,7 @@ def safe_move(from_path, remote, to_path):
     if from_stat.st_dev == to_stat.st_dev:
         simple_move(from_path, dest_path)
     else:
-        hash_and_rsync(from_path, dest_path)
+        hash_and_rsync(from_path, to_path, dest_path)
 
 
 def simple_move(from_path, dest_path):
@@ -87,7 +87,7 @@ def simple_move(from_path, dest_path):
     print(f"   :: renamed: {from_path} -> {dest_path}")
 
 
-def hash_and_rsync(from_path, dest_path):
+def hash_and_rsync(from_path, to_path, dest_path):
     print("   :: destination is on a different filesystem, using hash and rsync")
     bytes_needed = fail_if_no_permissions(from_path)
     fail_if_not_enough_space(bytes_needed, to_path)
