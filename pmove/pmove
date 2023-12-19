@@ -3,14 +3,17 @@
 pmove by Preston Hunt <me@prestonhunt.com>
 
 Helper script to reduce risks in moving files.
-- Ensure that backup path does not exist, to avoid overwriting files.
-- Ensure that source path does not contain immutable files
+- Ensure destination path does not exist, to avoid overwriting files.
+- Ensure source path does not contain immutable files
 - Ensure that user has permission to move the files
-- Ensure that backup path has enough space
-- Create hash of source path
-- Copy files to dest path using rsync
-- Verify hash of dest path
-- Remove source path
+- If source and destination are on the same filesystem:
+  - Use simple rename
+- If destination is on a different fileystem:
+  - Ensure that destination path has enough space
+  - Create hash of source path
+  - Rsync files to destination path
+  - Verify hash of destination path
+  - Remove source path
 """
 
 import argparse
@@ -70,6 +73,21 @@ def safe_move(from_path, remote, to_path):
     print("   :: destination path does not already exist")
 
     fail_if_immut(from_path)
+
+    from_stat = os.stat(from_path)
+    to_stat = os.stat(to_path)
+    if from_stat.st_dev == to_stat.st_dev:
+        simple_move(from_path, dest_path)
+    else:
+        hash_and_rsync(from_path, dest_path)
+
+
+def simple_move(from_path, dest_path):
+    os.rename(from_path, dest_path)
+    print(f"   :: renamed: {from_path} -> {dest_path}")
+
+
+def hash_and_rsync(from_path, dest_path):
     bytes_needed = fail_if_no_permissions(from_path)
     fail_if_not_enough_space(bytes_needed, to_path)
 
