@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+# pbenchfs by Preston Hunt <me@prestonhunt.com>
+#
+# Simple script to benchmark a filesystem, such as a USB storage device, SSD,
+# or HD. Reads data from /dev/urandom to ensure random data. Flushes cache
+# before reading data back.
+
+tmpfile=pbench.1G
+trap 'rm -f "$tmpfile"' EXIT
+
+run_dd() {
+    dd bs=1G count=1 "$@" |& grep -v records
+}
+
+{
+    echo "benchmarking performance of /dev/urandom"
+    run_dd if=/dev/urandom of=/dev/null
+    echo "note: write speed benchmark is limited to this value"
+
+    echo
+    echo "testing write speed with 1 GB from /dev/urandom"
+    run_dd if=/dev/urandom of="$tmpfile" oflag=direct
+
+    echo
+    echo "flushing disk cache"
+    echo 3 | sudo tee /proc/sys/vm/drop_caches &>/dev/null
+
+    echo
+    echo "testing read speed"
+    run_dd if="$tmpfile" of=/dev/null iflag=direct
+} |& tee results.$(date +%s)
+

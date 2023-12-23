@@ -1,0 +1,23 @@
+= pbenchfs
+
+Simple script to benchmark a filesystem, such as a USB storage device, SSD, or
+HD. Reads data from /dev/urandom to ensure random data. Flushes cache before
+reading data back.
+
+== Example output
+
+....
+❯ pbenchfs
+
+benchmarking performance of /dev/urandom
+1073741824 bytes (1.1 GB, 1.0 GiB) copied, 1.88809 s, 569 MB/s
+note: write speed benchmark is limited to this value
+
+testing write speed with 1 GB from /dev/urandom
+1073741824 bytes (1.1 GB, 1.0 GiB) copied, 2.13109 s, 504 MB/s
+
+flushing disk cache
+
+testing read speed
+1073741824 bytes (1.1 GB, 1.0 GiB) copied, 0.491669 s, 2.2 GB/s
+....
