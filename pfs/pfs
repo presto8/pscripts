@@ -1,0 +1,591 @@
+#!/usr/bin/env python
+"""
+pfs by Preston Hunt <me@prestonhunt.com>
+
+Helper to manage filesystems, in particular ZFS and MergerFS storage devices.
+"""
+
+import argparse
+import configparser
+import getpass
+import os
+import select
+import shutil
+import subprocess
+import sys
+import time
+
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Generator
+from types import SimpleNamespace
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    subparsers = parser.add_subparsers(dest='command')
+    commands = []
+    def add_command(name, *args, **kwargs):
+        commands.append(name)
+        return subparsers.add_parser(name, *args, **kwargs)
+
+    add_command('mount', help='mount filesystem')
+    add_command('unmount', help='mount filesystem')
+    add_command('list', help='list filesystem/mergerfs info')
+    add_command('snapshots', help='list snapshots')
+
+    parser.add_argument('--config', '-c', default=f"{__file__}.config", help='use this config file')
+    parser.add_argument('--verbose', '-v', default=False, action='store_true', help='show more detailed messages')
+    parser.add_argument('--delete-oldest', '-d', default=False, action='store_true', help='delete oldest snapshot')
+    parser.add_argument('--free-gb', '-f', default=False, type=int, required=False, help='delete snapshots until specified free space')
+
+    resolve_partial_command(commands)
+
+    return parser.parse_args()
+
+
+def main():
+    config = read_config(ARGS.config)
+    fs_list = list(config_to_mergerfs(config))
+    if len(fs_list) > 1:
+        print("More than 1 entry found, mounting first only, TODO: implement the rest")
+    fs = fs_list[0]
+
+    work = Work(fs)
+
+    if ARGS.command:
+        work.command(ARGS.command)
+    elif ARGS.delete_oldest:
+        print(f': "{fs}"')
+        delete_oldest_snapshots(fs.pools)
+        raise SystemExit(0)
+    elif ARGS.free_gb:
+        delete_until_free(fs, ARGS.free_gb)
+        raise SystemExit(0)
+
+    print(fs)
+    if ARGS.verbose:
+        for pool in fs.pools:
+            print(f"\t{pool}")
+
+    raise SystemExit(0 if fs.online else 1)
+
+
+def resolve_partial_command(commands: list[str]):
+    try:
+        command = sys.argv[1]
+    except IndexError:
+        return
+
+    if command in commands:
+        return command
+
+    possibles = []
+    for maybe_cmd in commands:
+        if maybe_cmd.startswith(command):
+            possibles.append(maybe_cmd)
+
+    if len(possibles) != 1:
+        return
+
+    sys.argv[1] = possibles[0]
+
+
+@dataclass
+class Work:
+    fs: "Mergerfs"
+
+    def command(self, name):
+        func = getattr(self, name)
+        return func()
+
+    def mount(self):
+        fs = self.fs
+        if fs.mounted:
+            print('already mounted:', fs)
+            return
+
+        fs.mount()
+        fs.set_zfs_slop()
+        print('mounted:', fs)
+        # small delay for filesystem to update else free space will be wrong
+        time.sleep(0.4)
+
+    def unmount(self):
+        fs = self.fs
+        if not fs.mounted:
+            print('already unmounted:', fs)
+        else:
+            fs.unmount()
+            print('unmounted:', fs)
+
+    def check_zfs_slop(self):
+        current_slop = get_zfs_slop()
+
+    def snapshots(self):
+        for generation in self.fs.snapshot_generations:
+            print(generation.pretty)
+        return
+        oldest_pools = []
+        for pool in self.fs.pools:
+            pool.get_snapshots()
+            if pool.snapshots:
+                oldest_pools.append(pool.snapshots[0])
+                print(pool.snapshots[0].pretty)
+        oldone = min([x.creation for x in oldest_pools])
+        matches = [x for x in oldest_pools if x.creation == oldone]
+        print(f"would delete with time {oldone}")
+        for snapshot in matches:
+            print(snapshot)
+
+
+def get_zfs_slop() -> int:
+    with open("/sys/module/zfs/parameters/spa_slop_shift", "rt") as f:
+        slop = f.read()
+    return int(slop)
+
+
+def read_config(configfile):
+    config = configparser.ConfigParser()
+    config.read(configfile)
+    return config
+
+
+def get_passphrase():
+    """If stdin has input waiting, assume that the password has been piped in and use it. Else, prompt for password."""
+    rlist, *_ = select.select([sys.stdin,], [], [], 0)
+    if rlist:
+        passphrase = next(sys.stdin).rstrip()
+    else:
+        passphrase = getpass.getpass()
+    return passphrase
+
+
+@dataclass
+class Snapshot:
+    name: str
+    creation: datetime
+    bytes_used: int
+
+    @property
+    def pretty(self):
+        return f"{self.creation} | {self.bytes_used:15,} | {self.name}"
+
+
+@dataclass
+class Pool:
+    pool: str
+    dataset: str | None = None
+    readonly: bool = False
+
+    def __post_init__(self) -> None:
+        self.snapshots: list[Snapshot] = []
+        total, used, free, unavail = 0, 0, 0, 0
+        if self.mounted:
+            total, used, free = shutil.disk_usage(self.mountpoint)
+        if self.readonly:
+            unavail = free
+            free = 0
+
+        self.bytes = SimpleNamespace(total=total, used=used, free=free, unavail=unavail)
+
+    def __repr__(self):
+        if not self.imported:
+            status = "NOT_IMPORTED"
+        elif not self.key_loaded:
+            status = "KEY_NOT_LOADED"
+        elif not self.mounted:
+            status = "NOT_MOUNTED"
+        else:
+            status = "mounted on " + self.mountpoint
+
+            if self.readonly:
+                status += f" unavail-due-to-readonly={tb(self.bytes.unavail, 3)}TB"
+
+        return f"Pool({self.name} {status})"
+
+    @property
+    def name(self):
+        name = self.pool
+        if self.dataset:
+            name += "/" + self.dataset
+        return name
+
+    @property
+    def imported(self):
+        # zpool status will return true if the pool is imported
+        return run("zpool", "status", self.pool).returncode == 0
+
+    def import_(self):
+        if not self.imported:
+            print(f"importing {self.pool}...", end=" ", flush=True)
+            return run("sudo", "zpool", "import", self.pool).returncode == 0
+        return True
+
+    def export_(self):
+        if self.imported:
+            print(f"exporting {self.pool}...", end=" ", flush=True)
+            result = run("sudo", "zpool", "export", self.pool)
+            if result.returncode != 0:
+                print("ERROR", self)
+            else:
+                print("done")
+            return result.returncode == 0
+
+    def get(self, name):
+        result = run("zfs get -H -p -o value".split() + [name, self.name])
+        return result.stdout.strip()
+
+    def get_all(self):
+        # TODO currently unused
+        self.properties = {}
+        result = run("zfs", "get", "-H", "all", self.name, "-o", "name,value")
+        for row in result.stdout.split("\n"):
+            name, value, = row.split()
+            self.properties[name] = value
+        print(self.properties)
+
+    def check_property(self, field, wantvalue):
+        if self.get(field) != wantvalue:
+            print(run("sudo", "zfs", "set", f"{field}={wantvalue}", self.name))
+
+    def check_properties(self):
+        props_to_check = {
+            "com.sun:auto-snapshot": "true",
+            "relatime": "on",
+            "atime": "on",
+            "compression": "lz4",
+            "xattr": "sa",
+            "acltype": "posix",
+        }
+
+        if self.readonly:
+            props_to_check['readonly'] = "on"
+            props_to_check['com.sun:auto-snapshot'] = "false"
+
+        for field, value in props_to_check.items():
+            self.check_property(field, value)
+
+    @property
+    def key_loaded(self):
+        return self.get("keystatus") == "available"
+
+    def load_key(self, passphrase):
+        if not self.key_loaded:
+            run("sudo", "zfs", "load-key", self.name, input=passphrase)
+
+    def unload_key(self):
+        if self.key_loaded:
+            run("sudo", "zfs", "unload-key", self.name)
+
+    @property
+    def mounted(self):
+        return self.get("mounted") == "yes"
+
+    @property
+    def mountpoint(self):
+        return self.get("mountpoint")
+
+    def mount(self, passphrase):
+        if not self.mounted:
+            if self.import_():
+                self.load_key(passphrase)
+                run("sudo", "zfs", "mount", self.name)
+                self.check_properties()
+        return self.mounted
+
+    def unmount(self):
+        if self.mounted:
+            lsof = run("sudo", "lsof", self.mountpoint)
+            if lsof.returncode == 0:
+                print("!! can't unmount while mountpoint is in use")
+                raise Fail(lsof)
+            run("sudo", "zfs", "umount", self.name)
+            self.unload_key()
+            self.export_()
+        return not self.mounted
+
+    def get_snapshots(self):
+        result = run("zfs", "list", "-t", "snapshot", self.name, "-H", "-o", "name,used,creation", "-p")
+        for row in result.stdout.strip().split("\n"):
+            if not row:
+                continue
+            name, used, creation = row.split()
+            tstamp = datetime.fromtimestamp(int(creation)).replace(second=0, microsecond=0)
+            entry = Snapshot(name, tstamp, int(used))
+            self.snapshots.append(entry)
+        return self.snapshots
+
+
+def tb(x: int, prec=1) -> float:
+    return round(x / 1024**4, prec)
+
+
+def gb(x: int, prec=1) -> str:
+    return f"{round(x / 1024**3, prec)}GB"
+
+
+@dataclass
+class Mergerfs:
+    name: str
+    pools: list[Pool]
+    mountpoint: str
+    warn_low_gb: int | None = None
+    warn_days_without_snapshot: int | None = None
+    zfs_slop: int = 5
+
+    def __post_init__(self):
+        self.passphrase = None
+        self._generations = None
+
+    def __repr__(self):
+        if not self.mounted:
+            status = "OFFLINE"
+        else:
+            info = [f"mountpoint={self.mountpoint}", f"total={tb(self.bytes.total)}TB", f"avail={tb(self.bytes.avail, 3)}TB"]
+            if self.bytes.unavail:
+                info += [f"unavail-ro={tb(self.bytes.unavail)}TB"]
+            if not self.degraded:
+                status = "online/healthy"
+            else:
+                reasons = " ".join(self.degraded)
+                status = "DEGRADED " + reasons
+            status = status + " " + " ".join(info)
+        return f"Mergerfs({self.name} {status})"
+
+    @property
+    def bytes(self):
+        if self.mounted:
+            total, used, free = shutil.disk_usage(self.mountpoint)
+            unavail = sum([x.bytes.unavail for x in self.pools])
+            avail = free - unavail
+            # TODO: Report inaccessible disk space due to read-only
+            return SimpleNamespace(total=total, used=used, avail=avail, unavail=unavail)
+
+    def mount(self):
+        if not self.mounted:
+            self._mount_pools()
+            self._mount_mergerfs()
+        return self.mounted
+
+    def unmount(self):
+        self._fail_if_mountpoint_in_use()
+        self._unmount_mergerfs()
+        self._unmount_pools()
+        return not self.mounted
+
+    @property
+    def degraded(self) -> [str]:
+        pools_unmounted = [x.mounted for x in self.pools].count(False)
+        if pools_unmounted > 0:
+            return [f"{pools_unmounted}_POOLS_UNMOUNTED"]
+
+        filesystem_name_output = run("df", "--output=source", self.mountpoint).stdout.split("\n")
+        expected_name = ":".join([os.path.basename(x.mountpoint) for x in self.pools])
+        mergerfs_fully_mounted = expected_name in filesystem_name_output
+        if not mergerfs_fully_mounted:
+            return ["INCOMPLETE_MERGERFS_MOUNT"]
+
+        errs = []
+
+        if self.bytes.total < self.expected_bytes:
+            errs.append(f"EXPECTED_{tb(self.expected_bytes)}_TB")
+
+        if self.warn_low_gb is not None and self.bytes.avail < self.warn_low_gb * (1024 ** 3):
+            errs.append("LOW-FREE-SPACE")
+
+        actual_slop = get_zfs_slop()
+        if actual_slop != self.zfs_slop:
+            errs.append(f"ZFS-SLOP-IS-{actual_slop}-WANT-{self.zfs_slop}")
+
+        return errs
+
+    def set_zfs_slop(self):
+        actual_slop = get_zfs_slop()
+        if actual_slop != self.zfs_slop:
+            run("sudo", "sh", "-c", f"echo {self.zfs_slop} >/sys/module/zfs/parameters/spa_slop_shift")
+
+    @property
+    def warnings(self) -> [str]:
+        return []
+
+    @property
+    def online(self):
+        return not self.degraded
+
+    @property
+    def expected_bytes(self):
+        return sum([x.bytes.total for x in self.pools])
+
+    @property
+    def mounted(self):
+        # return os.path.ismount(self.mountpoint)
+
+        result = run("mountpoint", self.mountpoint)
+        if "Transport endpoint is not connected" in result.stderr:
+            print("cleaning up transport not connected...")
+            print(run("sudo", "umount", self.mountpoint))
+        # print(result)
+        return result.returncode == 0
+
+    def _mount_pools(self):
+        for pool in self.pools:
+            if not pool.mounted:
+                if not self.passphrase:
+                    self.passphrase = get_passphrase()
+                pool.mount(self.passphrase)
+            print(pool)
+
+    def _fail_if_mountpoint_in_use(self):
+        lsof = run("sudo", "lsof", self.mountpoint)
+        if lsof.returncode == 0:
+            raise Fail(lsof)
+
+    def _unmount_pools(self):
+        for pool in self.pools:
+            if not pool.unmount():
+                raise Fail("{pool}")
+
+    def _mount_mergerfs(self):
+        not_mounted = [x for x in self.pools if not x.mounted]
+        if not_mounted:
+            print("not all pools are mounted:")
+            print("\n".join([str(x) for x in not_mounted]))
+            raise SystemExit(1)
+        if not self.mounted:
+            opts = "use_ino,cache.files=off,dropcacheonclose=true,allow_other,category.create=mfs,statfs_ignore=ro,minfreespace=10G,moveonenospc=true"
+            paths = ":".join(x.mountpoint for x in self.pools)
+            print("sudo", "mergerfs", "-o", opts, paths, self.mountpoint)
+            run("sudo", "mergerfs", "-o", opts, paths, self.mountpoint)
+
+    def _unmount_mergerfs(self):
+        if self.mounted:
+            run("sudo", "umount", self.mountpoint)
+
+    @property
+    def snapshot_generations(self):
+        buckets = defaultdict(list)
+        for pool in self.pools:
+            for snapshot in pool.get_snapshots():
+                buckets[snapshot.creation] += [snapshot]
+
+        result = []
+        for creation, snapshots in buckets.items():
+            result.append(SnapshotGeneration(creation=creation, snapshots=[x.name for x in snapshots], bytes_used=sum([x.bytes_used for x in snapshots])))
+
+        return sorted(result, key=lambda x: x.creation)
+
+def delete_until_free(fs, gb_wanted):
+    print(f": want {gb_wanted}GB free space, have {gb(fs.bytes.avail)} free currently")
+
+    bytes_wanted = gb_wanted * (1024 ** 3)
+    bytes_needed = bytes_wanted - fs.bytes.avail
+    bytes_freed = 0
+
+    num_generations = 0
+    while bytes_freed < bytes_needed:
+        num_generations += 1
+        bytes_freed = delete_oldest_snapshots(fs.pools, num_generations)
+
+    total_free = fs.bytes.avail + bytes_freed
+    print(f": done, total free space will be {gb(total_free)} if {num_generations} generations are deleted")
+
+
+def delete_oldest_snapshots(pools, delete_generations=1):
+    all_snapshots = [snapshot for pool in pools for snapshot in pool.get_snapshots()]  # flatten snapshots
+    generations = sorted(set([x.creation for x in all_snapshots]))  # get uniques
+    cutoff_idx = min(delete_generations, len(generations))
+    cutoff = generations[cutoff_idx - 1]
+    after = datetime.fromtimestamp(0)
+    return delete_snapshots_in_range(pools, after, cutoff)
+
+
+def delete_snapshots_in_range(pools, after: datetime, up_to_and_including: datetime) -> int:
+    freed_bytes = 0
+    for pool in pools:
+        for snapshot in pool.snapshots:
+            if after < snapshot.creation <= up_to_and_including:
+                if "zfs-auto-snap" not in snapshot.name:
+                    print(f"skipping {snapshot.name}")
+                else:
+                    print(f"zfs destroy {snapshot.name}")
+                    if not pool.readonly:
+                        freed_bytes += snapshot.bytes_used
+    print(f"sleep 1 && ./{__file__}")
+    print(f": deleting these snapshots will free {gb(freed_bytes)}")
+    print(f": hint: execute above commands with: !! | sudo bash -x")
+    return freed_bytes
+
+
+@dataclass
+class SnapshotGeneration:
+    creation: datetime
+    snapshots: list[str]
+    bytes_used: int
+
+    @property
+    def pretty(self):
+        return f"{self.creation} | {self.bytes_used:19,} | {len(self.snapshots):3} snapshots"
+
+
+def get_snapshot_generations(pools) -> list[SnapshotGeneration]:
+    buckets = defaultdict(list)
+    all_snapshots = [snapshot for pool in pools for snapshot in pool.get_snapshots()]  # flatten snapshots
+    for snapshot in all_snapshots:
+        buckets[snapshot.creation] = snapshot
+
+    result = []
+    for creation, snapshots in buckets.items():
+        result.append(SnapshotGeneration(creation=creation,
+                                         snapshots=[x.name for x in snapshots],
+                                         bytes_used=sum([x.bytes_used for x in snapshots])))
+
+    return result
+
+
+def config_to_mergerfs(config) -> Mergerfs:
+    for name in config.sections():
+        s = config[name]
+        pools = []
+        for poolspec in s['pools'].split():
+            first, sep, flags = poolspec.partition(':')
+            poolname, sep, dataset = first.partition('/')
+            pool = Pool(pool=poolname)
+            if dataset:
+                pool.dataset = dataset
+            if "ro" in flags:
+                pool.readonly = True
+            pools.append(pool)
+
+        yield Mergerfs(
+            name=name,
+            mountpoint=s['mountpoint'],
+            warn_low_gb=int(s['warn_low_gb']),
+            warn_days_without_snapshot=int(s['warn_days_without_snapshot']),
+            pools=pools,
+            zfs_slop=int(s['zfs_slop'])
+        )
+
+
+def run(*args, **kwargs):
+    kwargs['capture_output'] = True
+    kwargs['text'] = True
+    result = subprocess.run(args, **kwargs)
+    return result
+
+
+class Fail(Exception):
+    pass
+
+
+if __name__ == '__main__':
+    try:
+        ARGS = parse_args()
+        main()
+    except Fail as f:
+        print(*f.args, file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Ctrl+C")

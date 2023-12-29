@@ -1,0 +1,11 @@
+= pfs
+
+Helper to manage filesystems, in particular ZFS and MergerFS storage devices.
+
+Work in progress. Not ready for use yet.
+
+== Example output
+
+....
+TODO
+....
