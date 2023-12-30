@@ -2,6 +2,10 @@
 
 Helper to manage filesystems, in particular ZFS and MergerFS storage devices.
 
+Each system has a configuration for its storage devices in /etc/pfs.conf.
+pfs.conf lists the desired mountpoints and any components needed. For ZFS
+filesystems, pfs manages properties and snapshots.
+
 Work in progress. Not ready for use yet.
 
 == Example output
