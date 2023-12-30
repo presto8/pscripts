@@ -36,7 +36,7 @@ def parse_args():
     add_command('list', help='list filesystem/mergerfs info')
     add_command('snapshots', help='list snapshots')
 
-    parser.add_argument('--config', '-c', default=f"{__file__}.config", help='use this config file')
+    parser.add_argument('--config', '-c', default=f"/etc/pfs.conf", help='use this config file')
     parser.add_argument('--verbose', '-v', default=False, action='store_true', help='show more detailed messages')
     parser.add_argument('--delete-oldest', '-d', default=False, action='store_true', help='delete oldest snapshot')
     parser.add_argument('--free-gb', '-f', default=False, type=int, required=False, help='delete snapshots until specified free space')
@@ -235,7 +235,7 @@ class Pool:
             return result.returncode == 0
 
     def get(self, name):
-        result = run("zfs get -H -p -o value".split() + [name, self.name])
+        result = run("zfs", "get", "-H", "-p", "-o", "value", name, self.name)
         return result.stdout.strip()
 
     def get_all(self):
