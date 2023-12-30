@@ -457,7 +457,7 @@ class Mergerfs:
         if not self.mounted:
             mergerfs_options = (
                 "use_ino"
-                "cache.files=off"
+                "cache.files=partial"     # programs that use mmap need this setting, like rtorrent, sqlite3, jellyfin, and many more
                 "dropcacheonclose=true"
                 "allow_other"
                 "category.create=mfs"
