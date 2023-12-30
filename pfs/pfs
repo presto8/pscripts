@@ -455,7 +455,17 @@ class Mergerfs:
             print("\n".join([str(x) for x in not_mounted]))
             raise SystemExit(1)
         if not self.mounted:
-            opts = "use_ino,cache.files=off,dropcacheonclose=true,allow_other,category.create=mfs,statfs_ignore=ro,minfreespace=10G,moveonenospc=true"
+            mergerfs_options = (
+                "use_ino"
+                "cache.files=off"
+                "dropcacheonclose=true"
+                "allow_other"
+                "category.create=mfs"
+                "statfs_ignore=ro"
+                "minfreespace=10G"
+                "moveonenospc=true"
+            )
+            opts = ",".join(mergerfs_options)
             paths = ":".join(x.mountpoint for x in self.pools)
             print("sudo", "mergerfs", "-o", opts, paths, self.mountpoint)
             run("sudo", "mergerfs", "-o", opts, paths, self.mountpoint)
