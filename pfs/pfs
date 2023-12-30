@@ -459,9 +459,9 @@ class Mergerfs:
                 "cache.files=partial"     # programs that use mmap need this setting, like rtorrent, sqlite3, jellyfin, and many more
                 "dropcacheonclose=true"   # prevents double caching if cache.files is used
                 "category.create=mfs"     # use branch with most free space when creating files
-                "statfs_ignore=ro"
-                "minfreespace=10G"
-                "moveonenospc=true"
+                "statfs_ignore=ro"        # don't include free space on readonly devices when showing total free space
+                "minfreespace=10G"        # don't create files on drives with less than this amount of free space
+                "moveonenospc=true"       # documenting for clarity, defaults to true with mfs anyway
             )
             opts = ",".join(mergerfs_options)
             paths = ":".join(x.mountpoint for x in self.pools)
