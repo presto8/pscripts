@@ -377,7 +377,7 @@ class Mergerfs:
         return not self.mounted
 
     @property
-    def degraded(self) -> [str]:
+    def degraded(self) -> list[str]:
         pools_unmounted = [x.mounted for x in self.pools].count(False)
         if pools_unmounted > 0:
             return [f"{pools_unmounted}_POOLS_UNMOUNTED"]
@@ -408,7 +408,7 @@ class Mergerfs:
             run("sudo", "sh", "-c", f"echo {self.zfs_slop} >/sys/module/zfs/parameters/spa_slop_shift")
 
     @property
-    def warnings(self) -> [str]:
+    def warnings(self) -> list[str]:
         return []
 
     @property
@@ -477,6 +477,7 @@ class Mergerfs:
 
         return sorted(result, key=lambda x: x.creation)
 
+
 def delete_until_free(fs, gb_wanted):
     print(f": want {gb_wanted}GB free space, have {gb(fs.bytes.avail)} free currently")
 
@@ -515,7 +516,7 @@ def delete_snapshots_in_range(pools, after: datetime, up_to_and_including: datet
                         freed_bytes += snapshot.bytes_used
     print(f"sleep 1 && ./{__file__}")
     print(f": deleting these snapshots will free {gb(freed_bytes)}")
-    print(f": hint: execute above commands with: !! | sudo bash -x")
+    print(": hint: execute above commands with: !! | sudo bash -x")
     return freed_bytes
 
 
@@ -545,7 +546,7 @@ def get_snapshot_generations(pools) -> list[SnapshotGeneration]:
     return result
 
 
-def config_to_mergerfs(config) -> Mergerfs:
+def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
     for name in config.sections():
         s = config[name]
         pools = []
