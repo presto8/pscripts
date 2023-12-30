@@ -457,8 +457,8 @@ class Mergerfs:
         if not self.mounted:
             mergerfs_options = (
                 "cache.files=partial"     # programs that use mmap need this setting, like rtorrent, sqlite3, jellyfin, and many more
-                "dropcacheonclose=true"
-                "category.create=mfs"
+                "dropcacheonclose=true"   # prevents double caching if cache.files is used
+                "category.create=mfs"     # use branch with most free space when creating files
                 "statfs_ignore=ro"
                 "minfreespace=10G"
                 "moveonenospc=true"
