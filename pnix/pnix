@@ -38,7 +38,7 @@ main() {
             exit 0
             ;;
         build)
-            /etc/nixos/build
+            /etc/nixos/build "$@"
             ;;
         du)
             run_du
