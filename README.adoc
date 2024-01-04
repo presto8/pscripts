@@ -9,11 +9,17 @@ python.
 |https://github.com/presto8/pscripts/tree/main/lastf[lastf]
 |Finds the last modified file in a directory.
 
+|https://github.com/presto8/pscripts/tree/main/p-rofi-pass[p-rofi-pass]
+|Rofi wrapper around password-store.
+
 |https://github.com/presto8/pscripts/tree/main/pbenchfs[pbenchfs]
 |Simple disk I/O benchmark.
 
 |https://github.com/presto8/pscripts/tree/main/pdrives[pdrives]
 |Helps manage storage devices
+
+|https://github.com/presto8/pscripts/tree/main/pfs[pfs]
+|Helper to manage filesystems, in particular ZFS and MergerFS storage devices.
 
 |https://github.com/presto8/pscripts/tree/main/phash[phash]
 |Create a single SHA-256 hash value from a path.
