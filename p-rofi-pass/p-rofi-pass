@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+# Inspired by: https://github.com/carnager/rofi-pass
+
+set -Eeu -o pipefail
+
+main() {
+    setup
+    check_deps
+    cd ~/.password-store
+    do_rofi
+    do_action
+}
+
+do_action() {
+    case $MODE in
+        pass)
+            pass show "$ROFI_SELECTION" | head -1 | do_xclip
+            ;;
+        login)
+            get_field login | do_xclip
+            ;;
+        otp)
+            pass otp "$ROFI_SELECTION" | do_xclip
+    esac
+}
+
+do_xclip() {
+    xclip -rmlastnl
+}
+
+get_field() {
+    if set -- "$(pass show "$ROFI_SELECTION" | grep "^$1: ")"; then
+        shift
+        echo "$*"
+    fi
+}
+
+setup() {
+    declare -g MODE="pass"
+}
+
+check_deps() {
+    for dep in rofi pass; do
+        if ! which "$dep" &>/dev/null; then
+            die "need $dep but not in PATH"
+        fi
+    done
+}
+
+do_rofi() {
+    # Runs in a subshell when used in pipeline
+    cmd=(
+        rofi
+        -dmenu
+        -p pass
+    )
+    local -i rofi_ret=0
+    ROFI_SELECTION=$(list_passwords | "${cmd[@]}") || rofi_ret=$?
+    evaluate_rofi_rc $rofi_ret
+}
+
+evaluate_rofi_rc() {
+    # exit code >= 10 means keyboard shortcut was used, 10=Alt+1, 11=Alt+2, and so on.
+    case $1 in
+        10) MODE="pass" ;;
+        11) MODE="login" ;;
+        12) MODE="otp" ;;
+    esac
+}
+
+do_type() {
+    :
+    # disabled -- too dangerous -- unless we can tell if we are focused in an input box
+    # xdotool type --clearmodifiers --file -
+}
+
+
+listgpg() {
+    mapfile -d '' pw_list < <(find -L . -name '*.gpg' -print0)
+    pw_list=("${pw_list[@]#./}")
+    printf '%s\n' "${pw_list[@]}" | sort -n
+}
+
+# get all password files and output as newline-delimited text
+list_passwords() {
+    mapfile -t pw_list < <(listgpg)
+    printf '%s\n' "${pw_list[@]%.gpg}" | sort -n
+}
+
+die() { echo "!! $*"; exit 1; }
+
+main "$@"

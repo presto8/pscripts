@@ -1,0 +1,12 @@
+= p-rofi-pass
+
+Rofi wrapper around password-store; intended for binding to a keyboard shortcut
+in a window manager.
+
+== Example config
+
+In xmonad.hs:
+
+....
+     , ("M-; p",       spawn "p-rofi-pass")
+....
