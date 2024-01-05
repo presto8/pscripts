@@ -64,12 +64,12 @@ def path_to_PmovePath(path: str) -> PmovePath:
 
 def safe_move(from_path, remote, to_path):
     remote_fmt = f"{remote}:" if remote else ""
-    print(f":: {from_path} -> {remote_fmt}{to_path}")
+    print(f"{from_path} -> {remote_fmt}{to_path}")
 
     check_path_exists(from_path)
     check_path_exists(to_path)
     dest_path = get_destpath(from_path, to_path)
-    print(f"   :: destination doesn't exist: {dest_path}")
+    info(f"destination doesn't exist: {dest_path}")
 
     fail_if_immut(from_path)
 
@@ -82,13 +82,13 @@ def safe_move(from_path, remote, to_path):
 
 
 def simple_move(from_path, dest_path):
-    print("   :: destination is on the same filesystem, renaming")
+    info("destination is on the same filesystem, renaming")
     os.rename(from_path, dest_path)
-    print(f"   :: renamed: {from_path} -> {dest_path}")
+    info(f"renamed: {from_path} -> {dest_path}")
 
 
 def hash_and_rsync(from_path, to_path, dest_path):
-    print("   :: destination is on a different filesystem, using hash and rsync")
+    info("destination is on a different filesystem, using hash and rsync")
     bytes_needed = fail_if_no_permissions(from_path)
     fail_if_not_enough_space(bytes_needed, to_path)
 
@@ -100,20 +100,20 @@ def hash_and_rsync(from_path, to_path, dest_path):
     if from_hashdir != to_hashdir:
         raise Fail(f"hashes do not match! {from_hashdir} != {to_hashdir}")
 
-    print(f"   :: hashes match, removing files from {from_path}")
+    info(f"hashes match, removing files from {from_path}")
     remove_files(from_path, to_path)
 
-    print(f"   :: success: {from_path} -> {dest_path}")
+    info(f"success: {from_path} -> {dest_path}")
 
 
 def fail_if_immut(path):
-    print("   :: checking for immutable files")
+    info("checking for immutable files")
     result = run(["find", path, "-exec", "lsattr", "-d", "{}", ";"])
     found = False
     for entry in result.stdout.split("\n"):
         attr, _, relpath = entry.partition(" ")
         if "i" in attr:
-            print("\t" + entry)
+            info("\t" + entry)
             found = True
 
     if found:
@@ -121,14 +121,14 @@ def fail_if_immut(path):
 
 
 def fail_if_no_permissions(path) -> int:
-    print("   :: checking for file access permissions")
+    info("checking for file access permissions")
     total_bytes = 0
     for entry in scantree(path):
         if not os.access(entry, os.R_OK | os.W_OK) and not entry.is_symlink():
             raise Fail(f"don't have read/write access to {entry}")
         pathstat = entry.stat()
         total_bytes += pathstat.st_size
-    print(f"   :: {total_bytes:,} bytes to move")
+    info(f"{total_bytes:,} bytes to move")
     return total_bytes
 
 
@@ -136,7 +136,7 @@ def fail_if_not_enough_space(bytes_needed, path):
     total, used, free = shutil.disk_usage(path)
     if free < bytes_needed + 10000:  # add a pad to account for filesystem meta data
         raise Fail(f"need {bytes_needed:,} bytes but {path} only has {free:,}")
-    print(f"   :: {path} has enough free space: {free:,} bytes free")
+    info(f"{path} has enough free space: {free:,} bytes free")
 
 
 def remove_files(from_path, to_path):
@@ -172,12 +172,12 @@ def run(*args, **kwargs):
 
 
 def get_nixhash(path):
-    print(f"   :: getting nix-hash for: {path}")
+    info(f"getting nix-hash for: {path}")
 
     result = run(["nix-hash", path])
     parts = result.stdout.split()
     hashresult = parts[0]
-    print(f"   :: {hashresult}")
+    info(f"{hashresult}")
 
     if len(hashresult) != 32:
         raise Fail(f"unexpected hashdir: {hashresult}")
@@ -186,7 +186,7 @@ def get_nixhash(path):
 
 
 def rsync_files(from_path, to_path):
-    print("   :: copying files")
+    info("copying files")
     run(["rsync", "-av", from_path, to_path])
 
 
@@ -199,6 +199,10 @@ def scantree(path, follow_symlinks=False):  # generator that yields a Path
                 yield Path(entry)
     except NotADirectoryError:
         yield Path(path)
+
+
+def info(*args, **kwargs):
+    print(" ", *args, **kwargs)
 
 
 def get_remote_abspath(remote, path):
