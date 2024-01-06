@@ -48,11 +48,13 @@ def parse_args():
 
 def main():
     config = read_config(ARGS.config)
-    fs_list = list(config_to_mergerfs(config))
-    if len(fs_list) > 1:
-        print("More than 1 entry found, mounting first only, TODO: implement the rest")
-    fs = fs_list[0]
+    all_ret = 0
+    for fs in config_to_mergerfs(config):
+        all_ret += process_fs(fs)
+    raise SystemExit(all_ret)
 
+
+def process_fs(fs):
     work = Work(fs)
 
     if ARGS.command:
@@ -60,17 +62,17 @@ def main():
     elif ARGS.delete_oldest:
         print(f': "{fs}"')
         delete_oldest_snapshots(fs.pools)
-        raise SystemExit(0)
+        return 0
     elif ARGS.free_gb:
         delete_until_free(fs, ARGS.free_gb)
-        raise SystemExit(0)
+        return 0
 
     print(fs)
     if ARGS.verbose:
         for pool in fs.pools:
             print(f"\t{pool}")
 
-    raise SystemExit(0 if fs.online else 1)
+    return 0 if fs.online else 1
 
 
 def resolve_partial_command(commands: list[str]):
@@ -353,7 +355,7 @@ class Mergerfs:
                 reasons = " ".join(self.degraded)
                 status = "DEGRADED " + reasons
             status = status + " " + " ".join(info)
-        return f"Mergerfs({self.name} {status})"
+        return f"{self.name} {status}"
 
     @property
     def bytes(self):
@@ -377,14 +379,19 @@ class Mergerfs:
         return not self.mounted
 
     @property
+    def expected_name(self) -> str:
+        if len(self.pools) == 1:
+            return self.pools[0].name
+        return ":".join([os.path.basename(x.mountpoint) for x in self.pools])
+
+    @property
     def degraded(self) -> list[str]:
         pools_unmounted = [x.mounted for x in self.pools].count(False)
         if pools_unmounted > 0:
             return [f"{pools_unmounted}_POOLS_UNMOUNTED"]
 
         filesystem_name_output = run("df", "--output=source", self.mountpoint).stdout.split("\n")
-        expected_name = ":".join([os.path.basename(x.mountpoint) for x in self.pools])
-        mergerfs_fully_mounted = expected_name in filesystem_name_output
+        mergerfs_fully_mounted = self.expected_name in filesystem_name_output
         if not mergerfs_fully_mounted:
             return ["INCOMPLETE_MERGERFS_MOUNT"]
 
