@@ -150,7 +150,7 @@ def get_zfs_slop() -> int:
 
 
 def read_config(configfile):
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(delimiters=["="])
     config.read(configfile)
     return config
 
