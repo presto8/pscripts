@@ -350,7 +350,7 @@ class Mergerfs:
             if self.bytes.unavail:
                 info += [f"unavail-ro={tb(self.bytes.unavail)}TB"]
             if not self.degraded:
-                status = "online/healthy"
+                status = "online"
             else:
                 reasons = " ".join(self.degraded)
                 status = "DEGRADED " + reasons
