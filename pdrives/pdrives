@@ -126,8 +126,8 @@ class DriveAnalysis(NamedTuple):
     def display(self) -> dict:
         info_fields = "name model serial partitions labels fstypes".split()
         result = {name: f"{val}" for name, val in self.info._asdict().items() if name in info_fields}
-        analysis_fields = "years tb alerts".split()
-        result.update({name: f"{val}" for name, val in self.info._asdict().items() if name in analysis_fields})
+        analysis_fields = "years tb alerts flag status".split()
+        result.update({name: f"{val}" for name, val in self._asdict().items() if name in analysis_fields})
         return result
 
     def match(self, *args):
@@ -205,13 +205,9 @@ def print_drives(analyses: list[DriveAnalysis]) -> None:
 
     rows = []
     for analysis in analyses:
-        d = analysis.info._asdict()
-        a = analysis._asdict()
-        row = {**d, **a}
-
+        row = analysis.display
         if not ARGS.full:
             row['model'] = row['model'].split()[0]
-
         rows.append(row)
 
     print_table(header, rows)
