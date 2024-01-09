@@ -38,8 +38,9 @@ def main():
     for maybe_drive in get_drive_info_parallel():
         drives.append(maybe_drive)
         analysis = analyze_drive_info(maybe_drive)
-        analyses.append(analysis)
         debug(maybe_drive, "->", analysis)
+        if analysis.match(*ARGS.query):
+            analyses.append(analysis)
 
     if ARGS.test:
         for analysis in analyses:
@@ -58,9 +59,6 @@ def main():
 def get_drive_info_parallel():
     threads = []
     for path in get_drive_paths():
-        if ARGS.query:
-            if not all([q in path for q in ARGS.query]):
-                continue
         if ARGS.raw:
             subprocess.run(["sudo", "smartctl", "-a", path])
         debug(path, "getting info")
@@ -123,6 +121,18 @@ class DriveAnalysis(NamedTuple):
 
     def print(self, *args):
         print(self.info.name, *args)
+
+    @property
+    def display(self) -> dict:
+        info_fields = "name model serial partitions labels fstypes".split()
+        result = {name: f"{val}" for name, val in self.info._asdict().items() if name in info_fields}
+        analysis_fields = "years tb alerts".split()
+        result.update({name: f"{val}" for name, val in self.info._asdict().items() if name in analysis_fields})
+        return result
+
+    def match(self, *args):
+        row = " ".join(self.display.values()).lower()
+        return all([x.lower() in row for x in args])
 
 
 class DriveStatus(enum.Enum):
