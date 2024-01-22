@@ -69,7 +69,7 @@ main() {
             /etc/nixos/build test
             ;;
         up*)
-            nix flake update --extra-exprimental-features flakes
+            nix flake update --extra-experimental-features flakes
             ;;
         vi|edit)
             sudo vi /etc/nixos/"$HOSTNAME"/configuration.nix
