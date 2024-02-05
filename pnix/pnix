@@ -15,7 +15,7 @@ help() {
 #    optimize    run "sudo nix-store --optimise"
 #    switch      run "/etc/nixos/build switch"
 #    test        run "/etc/nixos/build test"
-#    update      run "nix flake update"
+#    update      run "nix flake update and sudo nix-channel --update"
 #    vi|edit     run "vi /etc/nixos/$HOSTNAME/configuration.nix"
 #
     awk '/help\(\)/{flag=1; next} /awk.*help/{flag=0} flag{sub(/# ?/,""); print}' "$0"
@@ -70,6 +70,7 @@ main() {
             ;;
         up*)
             nix flake update --extra-experimental-features flakes
+            run_sudo nix-channel --update
             ;;
         vi|edit)
             sudo vi /etc/nixos/"$HOSTNAME"/configuration.nix
