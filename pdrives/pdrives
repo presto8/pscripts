@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument('--raw', action='store_true', help='show raw smartctl output')
     parser.add_argument('--full', action='store_true', help='show full drive details')
     parser.add_argument('--test', action='store_true', help='start any needed tests')
+    parser.add_argument('--badblocks', action='store_true', help='run badblocks in non-destructive mode')
     parser.add_argument('--selftest-short-overdue-days', type=int, default=2, help='short selftest overdue after this many days')
     parser.add_argument('--selftest-long-overdue-days', type=int, default=28, help='long selftest overdue after this many days')
     return parser.parse_args()
@@ -52,6 +53,9 @@ def main():
                 run_smartctl(devname, "-t", "long")
                 analysis.print("started long-selftest")
                 start_keep_alive(analysis)
+    elif ARGS.badblocks:
+        for analysis in analyses:
+            run_badblocks(analysis)
     else:
         display_status(analyses)
 
@@ -109,6 +113,7 @@ class DriveInfo(NamedTuple):
     fstypes: list[str]
     selftest: AtaSelfTest | None
     nvmhealth: NvmHealth | None
+    badblocks_running: bool
 
 
 class DriveAnalysis(NamedTuple):
@@ -177,6 +182,9 @@ def format_alert(d: DriveInfo) -> str:
     if d.nvmhealth:
         if d.nvmhealth.available_spare < 100:
             alerts += ["available-spare-{d.nvmhealth.available_spare}%"]
+
+    if d.badblocks_running:
+        alerts += ["badblocks-running"]
 
     return " ".join(alerts)
 
@@ -291,6 +299,7 @@ def get_drive_info(drivepath) -> DriveInfo | None:
     result['selftest'] = get_selftest(j)
     result['nvmhealth'] = get_nvmhealth(j)
     result['partitions'] = j2 = run_lsblk(drivepath)
+    result['badblocks_running'] = badblocks_running(drivepath)
 
     try:
         children = j2['blockdevices'][0]['children']
@@ -365,6 +374,22 @@ def run_smartctl(*args):
     cmd = ["sudo", "smartctl", "--json", *args]
     result = subprocess.run(cmd, capture_output=True)
     return json.loads(result.stdout)
+
+
+def run_badblocks(analysis):
+    if analysis.info.badblocks_running:
+        analysis.print("badblocks already running")
+        return
+    devname = analysis.info.name
+    logfp = open(f"/tmp/pdrives-badblocks{devname.replace('/', '-')}", "w")
+    cmd = f"sudo badblocks -b 4096 -n -s {devname}".split()
+    subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
+    analysis.print(f"started badblocks in background, logging output to: {logfp}")
+
+
+def badblocks_running(drivepath):
+    result = subprocess.run(["pgrep", "-a", "-f", f"badblocks.*{drivepath}"], capture_output=True)
+    return result.returncode == 0
 
 
 def run_lsblk(*args):
