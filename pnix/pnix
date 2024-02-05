@@ -73,7 +73,7 @@ main() {
             run_sudo nix-channel --update
             ;;
         vi|edit)
-            sudo vi /etc/nixos/"$HOSTNAME"/configuration.nix
+            sudo vi /etc/nixos/"$HOSTNAME"/default.nix
             ;;
     esac
 }
