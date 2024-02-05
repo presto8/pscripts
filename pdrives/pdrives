@@ -13,6 +13,7 @@ import fnmatch
 import inspect
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -113,7 +114,7 @@ class DriveInfo(NamedTuple):
     fstypes: list[str]
     selftest: AtaSelfTest | None
     nvmhealth: NvmHealth | None
-    badblocks_running: bool
+    badblocks_running: str | None
 
 
 class DriveAnalysis(NamedTuple):
@@ -184,7 +185,7 @@ def format_alert(d: DriveInfo) -> str:
             alerts += ["available-spare-{d.nvmhealth.available_spare}%"]
 
     if d.badblocks_running:
-        alerts += ["badblocks-running"]
+        alerts += [f"badblocks-running-{d.badblocks_running}"]
 
     return " ".join(alerts)
 
@@ -387,9 +388,16 @@ def run_badblocks(analysis):
     analysis.print(f"started badblocks in background, logging output to: {logfp}")
 
 
-def badblocks_running(drivepath):
+def badblocks_running(drivepath) -> str | None:
     result = subprocess.run(["pgrep", "-a", "-f", f"badblocks.*{drivepath}"], capture_output=True)
-    return result.returncode == 0
+    if result.returncode != 0:
+        return None
+
+    with open(f"/tmp/pdrives-badblocks{drivepath.replace('/', '-')}", "r") as f:
+        status = f.read()
+
+    matches = re.findall(r'([\d\.]+%)', status)
+    return matches[-1]
 
 
 def run_lsblk(*args):
