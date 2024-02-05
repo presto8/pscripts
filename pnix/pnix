@@ -69,8 +69,9 @@ main() {
             /etc/nixos/build test
             ;;
         up*)
-            /etc/nixos/build update
-            run_sudo nix-channel --update
+            /etc/nixos/build update &
+            run_sudo nix-channel --update &
+            wait
             ;;
         vi|edit)
             sudo vi /etc/nixos/"$HOSTNAME"/default.nix
