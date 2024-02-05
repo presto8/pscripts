@@ -69,7 +69,7 @@ main() {
             /etc/nixos/build test
             ;;
         up*)
-            nix flake update --extra-experimental-features flakes
+            /etc/nixos/build update
             run_sudo nix-channel --update
             ;;
         vi|edit)
