@@ -46,7 +46,7 @@ def main():
 
     if ARGS.test:
         for analysis in analyses:
-            devname = analysis.info.name
+            devname = analysis.info.path
             if 'short-selftest-overdue' in analysis.alerts:
                 run_smartctl(devname, "-t", "short")
                 analysis.print("started short-selftest")
@@ -103,6 +103,7 @@ class NvmHealth(NamedTuple):
 
 class DriveInfo(NamedTuple):
     name: str
+    path: str
     model: str
     serial: str
     capacity_bytes: int
@@ -284,8 +285,8 @@ def get_drive_info(drivepath) -> DriveInfo | None:
     if ARGS.debug:
         print(json.dumps(j, indent=4))
 
-    result = dict(name=drivepath)
-
+    result = dict(path=drivepath)
+    result['name'] = drivepath.split('/')[-1]
     result['model'] = j.get('model_family', j.get('model_name', 'Unknown'))
     try:
         result['serial'] = j['serial_number']
@@ -381,9 +382,8 @@ def run_badblocks(analysis):
     if analysis.info.badblocks_running:
         analysis.print("badblocks already running")
         return
-    devname = analysis.info.name
-    logfp = open(f"/tmp/pdrives-badblocks{devname.replace('/', '-')}", "w")
-    cmd = f"sudo badblocks -b 4096 -n -s {devname}".split()
+    logfp = open(f"/tmp/pdrives-badblocks-{analysis.info.name}", "w")
+    cmd = f"sudo badblocks -b 4096 -n -s {analysis.info.path}".split()
     subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
     analysis.print(f"started badblocks in background, logging output to: {logfp}")
 
@@ -414,17 +414,15 @@ def get_drive_paths() -> Generator[str, None, None]:
 
 
 def start_keep_alive(analysis):
-    devname = analysis.info.name
-    partition = analysis.info.partitions[0]
     cmd = ["bash", "-x", "-c", f"""
     while sleep 60s; do
-        if ! sudo smartctl -a {devname} | grep 'of test remaining'; then
+        if ! sudo smartctl -a {analysis.info.path} | grep 'of test remaining'; then
             break
         fi
-        sudo dd if=/dev/{partition} iflag=direct count=1 of=/dev/null
+        sudo dd if={analysis.info.path} iflag=direct count=1 of=/dev/null
     done
     """]
-    logfp = open(f"/tmp/pdrives-keepalive-{partition}", "w")
+    logfp = open(f"/tmp/pdrives-keepalive-{analysis.info.name}", "w")
     subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
     analysis.print("started background keep-alive")
 
