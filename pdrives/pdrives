@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env nix-shell
+#! nix-shell -p smartmontools -i python3
+
 """pdrives by Preston Hunt <me@prestonhunt.com>
 
 A Python script that helps manage storage devices with such tasks as:
