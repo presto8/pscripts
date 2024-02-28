@@ -34,7 +34,9 @@ def parse_args():
     add_command('mount', help='mount filesystem')
     add_command('unmount', help='mount filesystem')
     add_command('list', help='list filesystem/mergerfs info')
-    add_command('snapshots', help='list snapshots')
+
+    snapshots = add_command('snapshots', help='list snapshots')
+    snapshots.add_argument('--all', default=False, action='store_true', help='include empty snapshots')
 
     parser.add_argument('--config', '-c', default=f"/etc/pfs.conf", help='use this config file')
     parser.add_argument('--verbose', '-v', default=False, action='store_true', help='show more detailed messages')
@@ -127,8 +129,14 @@ class Work:
         current_slop = get_zfs_slop()
 
     def snapshots(self):
+        skipped_empty = 0
         for generation in self.fs.snapshot_generations:
+            if generation.bytes_used == 0 and not ARGS.all:
+                skipped_empty += 1
+                continue
             print(generation.pretty)
+        if skipped_empty > 0:
+            print(f"{skipped_empty} empty snapshots not shown; run with --all to see")
 
 
 def get_zfs_slop() -> int:
