@@ -129,18 +129,6 @@ class Work:
     def snapshots(self):
         for generation in self.fs.snapshot_generations:
             print(generation.pretty)
-        return
-        oldest_pools = []
-        for pool in self.fs.pools:
-            pool.get_snapshots()
-            if pool.snapshots:
-                oldest_pools.append(pool.snapshots[0])
-                print(pool.snapshots[0].pretty)
-        oldone = min([x.creation for x in oldest_pools])
-        matches = [x for x in oldest_pools if x.creation == oldone]
-        print(f"would delete with time {oldone}")
-        for snapshot in matches:
-            print(snapshot)
 
 
 def get_zfs_slop() -> int:
