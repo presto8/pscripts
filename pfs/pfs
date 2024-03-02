@@ -56,6 +56,20 @@ def main():
     raise SystemExit(all_ret)
 
 
+class PassphraseManager:
+    def __init__(self):
+        self.passphrases = []
+
+    def get_passphrase(self):
+        """If stdin has input waiting, assume that the password has been piped in and use it. Else, prompt for password."""
+        rlist, *_ = select.select([sys.stdin,], [], [], 0)
+        if rlist:
+            passphrase = next(sys.stdin).rstrip()
+        else:
+            passphrase = getpass.getpass()
+        self.passphrases += [passphrase]
+
+
 def process_fs(fs):
     work = Work(fs)
 
@@ -149,16 +163,6 @@ def read_config(configfile):
     config = configparser.ConfigParser(delimiters=["="])
     config.read(configfile)
     return config
-
-
-def get_passphrase():
-    """If stdin has input waiting, assume that the password has been piped in and use it. Else, prompt for password."""
-    rlist, *_ = select.select([sys.stdin,], [], [], 0)
-    if rlist:
-        passphrase = next(sys.stdin).rstrip()
-    else:
-        passphrase = getpass.getpass()
-    return passphrase
 
 
 @dataclass
@@ -335,7 +339,6 @@ class Mergerfs:
     zfs_slop: int = 5
 
     def __post_init__(self):
-        self.passphrase = None
         self._generations = None
 
     def __repr__(self):
@@ -435,10 +438,14 @@ class Mergerfs:
 
     def _mount_pools(self):
         for pool in self.pools:
-            if not pool.mounted:
-                if not self.passphrase:
-                    self.passphrase = get_passphrase()
-                pool.mount(self.passphrase)
+            while not pool.mounted:
+                # try existing passphrases
+                for pw in PASSMGR.passphrases:
+                    if pool.mount(pw):
+                        break
+                else:
+                    # prompt for a new passphrase and try again
+                    PASSMGR.get_passphrase()
             print(pool)
 
     def _fail_if_mountpoint_in_use(self):
@@ -595,6 +602,7 @@ class Fail(Exception):
 if __name__ == '__main__':
     try:
         ARGS = parse_args()
+        PASSMGR = PassphraseManager()
         main()
     except Fail as f:
         print(*f.args, file=sys.stderr)
