@@ -271,6 +271,7 @@ class DriveInfoThread(threading.Thread):
     def __init__(self, drivepath):
         debug("DriveInfoThread:", drivepath)
         self.drivepath = drivepath
+        self.result = None
         super().__init__()
 
     def run(self):
