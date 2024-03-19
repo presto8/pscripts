@@ -388,7 +388,7 @@ def run_badblocks(analysis):
     logfp = open(f"/tmp/pdrives-badblocks-{analysis.info.name}", "w")
     cmd = f"sudo badblocks -b 4096 -n -s {analysis.info.path}".split()
     subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
-    analysis.print(f"started badblocks in background, logging output to: {logfp}")
+    analysis.print(f"started badblocks in background, logging output to: {logfp.name}")
 
 
 def badblocks_running(drivepath) -> str | None:
