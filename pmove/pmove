@@ -42,7 +42,14 @@ def main():
 
     for from_path in ARGS.from_paths:
         from_path = os.path.abspath(from_path)
-        safe_move(from_path, remote, to_path)
+        try:
+            safe_move(from_path, remote, to_path)
+        except MoveFail as mf:
+            print(mf, file=sys.stderr)
+
+
+class MoveFail(Exception):
+    pass
 
 
 @dataclass
@@ -98,7 +105,7 @@ def hash_and_rsync(from_path, to_path, dest_path):
     to_hashdir = get_nixhash(dest_path)
 
     if from_hashdir != to_hashdir:
-        raise Fail(f"hashes do not match! {from_hashdir} != {to_hashdir}")
+        raise MoveFail(f"hashes do not match! {from_hashdir} != {to_hashdir}")
 
     info(f"hashes match, removing files from {from_path}")
     remove_files(from_path, to_path)
@@ -117,7 +124,7 @@ def fail_if_immut(path):
             found = True
 
     if found:
-        raise Fail("!! aborting due to immutable files")
+        raise MoveFail("!! aborting due to immutable files")
 
 
 def fail_if_no_permissions(path) -> int:
@@ -125,7 +132,7 @@ def fail_if_no_permissions(path) -> int:
     total_bytes = 0
     for entry in scantree(path):
         if not os.access(entry, os.R_OK | os.W_OK) and not entry.is_symlink():
-            raise Fail(f"don't have read/write access to {entry}")
+            raise MoveFail(f"don't have read/write access to {entry}")
         pathstat = entry.stat(follow_symlinks=False)
         total_bytes += pathstat.st_size
     info(f"{total_bytes:,} bytes to move")
@@ -135,14 +142,14 @@ def fail_if_no_permissions(path) -> int:
 def fail_if_not_enough_space(bytes_needed, path):
     total, used, free = shutil.disk_usage(path)
     if free < bytes_needed + 10000:  # add a pad to account for filesystem meta data
-        raise Fail(f"need {bytes_needed:,} bytes but {path} only has {free:,}")
+        raise MoveFail(f"need {bytes_needed:,} bytes but {path} only has {free:,}")
     info(f"{path} has enough free space: {free:,} bytes free")
 
 
 def remove_files(from_path, to_path):
     result = run(["rsync", "-a", "--info=name", from_path, to_path, "--remove-source-files"])
     if result.stdout != '':
-        raise Fail(result)
+        raise MoveFail(result)
     if os.path.isdir(from_path):
         # remove empty directories left behind by rsync
         run(["find", from_path, "-type", "d", "-empty", "-delete"])
@@ -153,14 +160,14 @@ def check_path_exists(path):
     # See https://stackoverflow.com/questions/21292365/python-os-path-exists-failing-for-nfs-mounted-directory-file-that-exists
     subprocess.run(["ls", path], capture_output=True)
     if not os.path.exists(path):
-        raise Fail(f"path does not exist: {path}")
+        raise MoveFail(f"path does not exist: {path}")
 
 
 def get_destpath(from_path, to_path):
     from_base = os.path.basename(from_path)
     dest_path = os.path.join(to_path, from_base)
     if os.path.exists(dest_path):
-        raise Fail(f"!! not clobbering existing path: {dest_path}")
+        raise MoveFail(f"!! not clobbering existing path: {dest_path}")
     return dest_path
 
 
@@ -180,7 +187,7 @@ def get_nixhash(path):
     info(f"{hashresult}")
 
     if len(hashresult) != 32:
-        raise Fail(f"unexpected hashdir: {hashresult}")
+        raise MoveFail(f"unexpected hashdir: {hashresult}")
 
     return hashresult
 
