@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+help() {
+# qq (Quick Quote) by Preston Hunt <me@prestonhunt.com>
+#
+# Passes multiple arguments as single argument to a program.
+#   Example: qq cd a path with spaces
+#   Becomes: cd "a path with spaces"
+#
+# By default, the first argument is the command and the remaining arguments are
+# joined into one.
+#
+# Alternate usage, the command arguments are separated by -- from the remaining.
+#   Example: qq find -name -- a path with spaces
+#   Becomes: find -name "a path with spaces"
+    awk '/help\(\)/{flag=1; next} /awk.*help/{flag=0} flag{sub(/# ?/,""); print}' "$0"
+}
+
+main() {
+    set -Eeu -o pipefail
+
+    parse_args "$@"
+    "${FINAL[@]}"
+}
+
+parse_args() {
+    ARGS=()  # unprocessed/pass through args
+    FINAL=()
+
+    if [[ $# -eq 0 ]]; then
+        help
+        die "did not specify any arguments"
+    fi
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|help) help; exit 0 ;;
+            --) shift ; break ;;
+            *) ARGS+=("$1") ;;
+        esac
+        shift  # shift 1 automatically for all cases, but arguments that take an arg need to shift additionally
+    done
+
+    if [[ $# -gt 0 ]]; then
+        # If we still have original args left, then we encountered --
+        # Treat ARGS as the program
+        FINAL+=( "${ARGS[@]}" )
+        FINAL+=( "$(printf "%q" "$*")" )
+    else
+        # First argument is the command, remaining arguments are to be quoted
+        FINAL=( "${ARGS[0]}" )
+        FINAL+=( "$(printf "%q" "${ARGS[*]:1}")" )
+    fi
+}
+
+die() { echo "!! $*"; exit 1; }
+
+main "$@"

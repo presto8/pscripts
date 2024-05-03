@@ -33,4 +33,7 @@ python.
 |https://github.com/presto8/pscripts/tree/main/psg[psg]
 |Shows processes matching search terms.
 
+|https://github.com/presto8/pscripts/tree/main/qq[qq]
+|Quick Quote: passes multiple arguments as a single argument
+
 |===
