@@ -300,14 +300,19 @@ class Pool:
 
     def unmount(self):
         if self.mounted:
-            lsof = run("sudo", "lsof", self.mountpoint)
-            if lsof.returncode == 0:
-                print("!! can't unmount while mountpoint is in use")
-                raise Fail(lsof)
+            if self.locks > 0:
+                raise Fail("!! can't unmount while mountpoint is in use")
             run("sudo", "zfs", "umount", self.name)
             self.unload_key()
             self.export_()
         return not self.mounted
+
+    @property
+    def locks(self) -> int:
+        if not self.mounted:
+            return 0
+        lsof = run("sudo", "lsof", self.mountpoint)
+        return lsof.stdout.count("\n") - 1
 
     def get_snapshots(self):
         result = run("zfs", "list", "-t", "snapshot", self.name, "-H", "-o", "name,used,creation", "-p")
@@ -345,7 +350,7 @@ class Mergerfs:
         if not self.mounted:
             status = "OFFLINE"
         else:
-            info = [f"mountpoint={self.mountpoint}", f"total={tb(self.bytes.total)}TB", f"avail={tb(self.bytes.avail, 3)}TB"]
+            info = [f"mountpoint={self.mountpoint}", f"total={tb(self.bytes.total)}TB", f"avail={tb(self.bytes.avail, 3)}TB locks={self.locks}"]
             if self.bytes.unavail:
                 info += [f"unavail-ro={tb(self.bytes.unavail)}TB"]
             if not self.degraded:
@@ -364,6 +369,13 @@ class Mergerfs:
             avail = free - unavail
             # TODO: Report inaccessible disk space due to read-only
             return SimpleNamespace(total=total, used=used, avail=avail, unavail=unavail)
+
+    @property
+    def locks(self) -> int:
+        if not self.mounted:
+            return 0
+        lsof = run("sudo", "lsof", self.mountpoint)
+        return lsof.stdout.count("\n") - 1
 
     def mount(self):
         if not self.mounted:
@@ -449,9 +461,8 @@ class Mergerfs:
             print(pool)
 
     def _fail_if_mountpoint_in_use(self):
-        lsof = run("sudo", "lsof", self.mountpoint)
-        if lsof.returncode == 0:
-            raise Fail(lsof)
+        if self.locks > 0:
+            raise Fail(f"!! can't unmount while mountpoint is in use; hint: sudo lsof {self.mountpoint}")
 
     def _unmount_pools(self):
         for pool in self.pools:
