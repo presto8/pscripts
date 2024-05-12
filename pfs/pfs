@@ -312,6 +312,8 @@ class Pool:
         if not self.mounted:
             return 0
         lsof = run("sudo", "lsof", self.mountpoint)
+        if lsof.returncode != 0:
+            return 0
         return lsof.stdout.count("\n") - 1
 
     def get_snapshots(self):
@@ -375,6 +377,8 @@ class Mergerfs:
         if not self.mounted:
             return 0
         lsof = run("sudo", "lsof", self.mountpoint)
+        if lsof.returncode != 0:
+            return 0
         return lsof.stdout.count("\n") - 1
 
     def mount(self):
