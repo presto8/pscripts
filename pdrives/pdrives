@@ -304,7 +304,7 @@ def get_drive_info(drivepath) -> DriveInfo | None:
     result['selftest'] = get_selftest(j)
     result['nvmhealth'] = get_nvmhealth(j)
     result['partitions'] = j2 = run_lsblk(drivepath)
-    result['badblocks_running'] = badblocks_running(drivepath)
+    result['badblocks_running'] = badblocks_running(result['name'])
 
     try:
         children = j2['blockdevices'][0]['children']
@@ -381,22 +381,25 @@ def run_smartctl(*args):
     return json.loads(result.stdout)
 
 
+BADBLOCKS_LOG_TEMPLATE = "/tmp/pdrives-badblocks-{}"
+
+
 def run_badblocks(analysis):
     if analysis.info.badblocks_running:
         analysis.print("badblocks already running")
         return
-    logfp = open(f"/tmp/pdrives-badblocks-{analysis.info.name}", "w")
+    logfp = open(BADBLOCKS_LOG_TEMPLATE.format(analysis.info.name), "w")
     cmd = f"sudo badblocks -b 4096 -n -s {analysis.info.path}".split()
     subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
     analysis.print(f"started badblocks in background, logging output to: {logfp.name}")
 
 
-def badblocks_running(drivepath) -> str | None:
-    result = subprocess.run(["pgrep", "-a", "-f", f"badblocks.*{drivepath}"], capture_output=True)
+def badblocks_running(name) -> str | None:
+    result = subprocess.run(["pgrep", "-a", "-f", f"badblocks.*{name}"], capture_output=True)
     if result.returncode != 0:
         return None
 
-    with open(f"/tmp/pdrives-badblocks{drivepath.replace('/', '-')}", "r") as f:
+    with open(BADBLOCKS_LOG_TEMPLATE.format(name), "r") as f:
         status = f.read()
 
     matches = re.findall(r'([\d\.]+%)', status)
