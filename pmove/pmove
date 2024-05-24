@@ -11,8 +11,9 @@ Helper script to reduce risks in moving files.
 - If destination is on a different fileystem:
   - Ensure that destination path has enough space
   - Create hash of source path
-  - Rsync files to destination path
-  - Verify hash of destination path
+  - Rsync files to temporary destination path
+  - Verify hash of temporary destination path
+  - Rename temporary destination path
   - Remove source path
 """
 
@@ -22,6 +23,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 
@@ -99,14 +101,21 @@ def hash_and_rsync(from_path, to_path, dest_path):
     bytes_needed = fail_if_no_permissions(from_path)
     fail_if_not_enough_space(bytes_needed, to_path)
 
+    while True:
+        descriminator = datetime.now().strftime("pmove.tmp.%Y-%m-%dT%H.%M.%S.%f")
+        tmp_path = os.path.join(dest_path + "-" + descriminator)
+        if not os.path.exists(tmp_path):
+            break
+
     from_hashdir = get_nixhash(from_path)
-    rsync_files(from_path, to_path)
+    rsync_files(from_path, tmp_path)
 
-    to_hashdir = get_nixhash(dest_path)
-
+    tmp_contents = os.path.join(tmp_path, os.path.basename(from_path))
+    to_hashdir = get_nixhash(tmp_contents)
     if from_hashdir != to_hashdir:
         raise MoveFail(f"hashes do not match! {from_hashdir} != {to_hashdir}")
 
+    os.rename(tmp_contents, dest_path)
     info(f"hashes match, removing files from {from_path}")
     remove_files(from_path, to_path)
 
@@ -192,8 +201,12 @@ def get_nixhash(path):
     return hashresult
 
 
+def get_sha256deep(path) -> Path:
+    pass
+
+
 def rsync_files(from_path, to_path):
-    info("copying files")
+    info(f"copying files to {to_path}")
     run(["rsync", "-av", from_path, to_path])
 
 
