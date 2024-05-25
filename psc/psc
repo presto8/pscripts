@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#
+# psc by Preston Hunt <me@prestonhunt.com>
+#
+# Convenience wrapper for systemctl
+
+if [[ $1 == log ]]; then
+    shift
+    exec journalctl -xefu "$@"
+fi
+
+if [[ $* == *--user* ]]; then
+    systemctl "$@"
+else
+    sudo systemctl "$@"
+fi
