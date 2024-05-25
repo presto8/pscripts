@@ -34,9 +34,8 @@ def parse_args():
     add_command('mount', help='mount filesystem')
     add_command('unmount', help='mount filesystem')
     add_command('list', help='list filesystem/mergerfs info')
-
-    snapshots = add_command('snapshots', help='list snapshots')
-    snapshots.add_argument('--all', default=False, action='store_true', help='include empty snapshots')
+    add_command('locks', help='show locks on filesystems')
+    add_command('snapshots', help='list snapshots')
 
     parser.add_argument('--config', '-c', default=f"/etc/pfs.conf", help='use this config file')
     parser.add_argument('--verbose', '-v', default=False, action='store_true', help='show more detailed messages')
@@ -145,12 +144,17 @@ class Work:
     def snapshots(self):
         skipped_empty = 0
         for generation in self.fs.snapshot_generations:
-            if generation.bytes_used == 0 and not ARGS.all:
+            if generation.bytes_used == 0:
                 skipped_empty += 1
                 continue
             print(generation.pretty)
         if skipped_empty > 0:
             print(f"{skipped_empty} empty snapshots not shown; run with --all to see")
+
+    def locks(self):
+        print(self.fs)
+        for lock in self.fs.locks:
+            print(lock)
 
 
 def get_zfs_slop() -> int:
@@ -352,7 +356,7 @@ class Mergerfs:
         if not self.mounted:
             status = "OFFLINE"
         else:
-            info = [f"mountpoint={self.mountpoint}", f"total={tb(self.bytes.total)}TB", f"avail={tb(self.bytes.avail, 3)}TB locks={self.locks}"]
+            info = [f"mountpoint={self.mountpoint}", f"total={tb(self.bytes.total)}TB", f"avail={tb(self.bytes.avail, 3)}TB locks={self.lock_count}"]
             if self.bytes.unavail:
                 info += [f"unavail-ro={tb(self.bytes.unavail)}TB"]
             if not self.degraded:
@@ -373,13 +377,19 @@ class Mergerfs:
             return SimpleNamespace(total=total, used=used, avail=avail, unavail=unavail)
 
     @property
-    def locks(self) -> int:
+    def locks(self) -> list[str]:
         if not self.mounted:
             return 0
         lsof = run("sudo", "lsof", self.mountpoint)
         if lsof.returncode != 0:
             return 0
-        return lsof.stdout.count("\n") - 1
+        lock_list = lsof.stdout.strip("\n").split("\n")
+        return lock_list[1:]  # skip header line
+
+    @property
+    def lock_count(self) -> int:
+        return len(self.locks)
+
 
     def mount(self):
         if not self.mounted:
@@ -465,7 +475,7 @@ class Mergerfs:
             print(pool)
 
     def _fail_if_mountpoint_in_use(self):
-        if self.locks > 0:
+        if self.lock_count > 0:
             raise Fail(f"!! can't unmount while mountpoint is in use; hint: sudo lsof {self.mountpoint}")
 
     def _unmount_pools(self):
