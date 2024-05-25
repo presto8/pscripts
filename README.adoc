@@ -36,4 +36,7 @@ python.
 |https://github.com/presto8/pscripts/tree/main/qq[qq]
 |Quick Quote: passes multiple arguments as a single argument
 
+|https://github.com/presto8/pyt/tree/main/pyt[pyt]
+|Helper for yt-dlp that applies useful defaults.
+
 |===
