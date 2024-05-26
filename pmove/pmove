@@ -107,6 +107,8 @@ def hash_and_rsync(from_path, to_path, dest_path):
         if not os.path.exists(tmp_path):
             break
 
+    os.makedirs(tmp_path)
+
     from_hashdir = get_nixhash(from_path)
     rsync_files(from_path, tmp_path)
 
