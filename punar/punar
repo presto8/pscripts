@@ -1,0 +1,207 @@
+#!/usr/bin/env python
+"""
+punar by Preston Hunt <me@prestonhunt.com>
+
+Universal archive extractor.
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+from datetime import datetime
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Optional, TypeVar
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    parser.add_argument('archives', nargs='+', help='path of archives to extract')
+    parser.add_argument('--verbose', default=False, action='store_true', help='show more detailed messages')
+    parser.add_argument('--cull', default=False, action='store_true', help='cull unwanted files when extracting archives (__MACOSX, .DS_Store, ...)')
+    parser.add_argument('--rm', default=False, action='store_true', help='remove archive file upon successful extraction')
+    return parser.parse_args()
+
+
+def main():
+    for path in ARGS.archives:
+        result = extract_archive(path)
+        print(f"{path} -> {result.finaldir} [{result.filecount} files]")
+        if ARGS.rm:
+            os.unlink(path)
+            print(f"removed {path}")
+        print(f'cd "{result.finaldir}"')
+
+
+@dataclass
+class Extractor:
+    exe: str
+    extensions: list[str]
+    args: list[str]
+
+
+EXTRACTORS = [
+    Extractor("7z", "7z".split(), ["x"]),
+    Extractor("unzip", "zip".split(), []),
+    Extractor("tar", "tar tar.bz2 tar.gz tgz".split(), ["xf"]),
+]
+
+
+@dataclass
+class ExtractArchiveResult:
+    finaldir: str
+    filecount: int
+
+
+@dataclass
+class ParsedPath:
+    user_input: str
+    abspath: str
+    extension: str
+    basepath: str
+    extract_command: str
+    basedir: str
+    extractedpath: Optional[str] = None
+    culled_count: int = 0
+
+
+@contextmanager
+def cwd(path):
+    oldpwd = os.getcwd()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(oldpwd)
+
+
+def scantree(path, follow_symlinks=False):
+    for entry in os.scandir(path):
+        if entry.is_dir(follow_symlinks=follow_symlinks):
+            yield from scantree(entry.path, follow_symlinks=follow_symlinks)
+        else:
+            yield entry
+
+
+def get_extractor(path) -> Extractor | None:
+    for extractor in EXTRACTORS:
+        for extension in extractor.extensions:
+            if path.endswith(extension):
+                return extractor
+    return None
+
+
+def parse_path(path) -> Optional[ParsedPath]:
+    extensions = {
+        ".zip": "7z x",
+        ".tar": "tar xf",
+        ".tar.bz2": "tar xf",
+        ".tar.gz": "tar xf",
+        ".tgz": "tar xf",
+        ".tar.xz": "tar xf",
+        ".tgz": "tar xf",
+        ".rar": "unrar x",
+        ".7z": "7z x",
+        ".7zip": "7z x",
+    }
+
+    filetypes = {
+        b"Zip archive data": "unzip",
+    }
+
+    for ext, cmd in extensions.items():
+        if path.endswith(ext):
+            break
+    else:
+        # try and guess filetype
+        result = subprocess.run(["file", path], capture_output=True)
+        for type_, cmd in filetypes.items():
+            if type_ in result.stdout:
+                break
+        else:
+            return None
+
+    return ParsedPath(user_input=path,
+                      abspath=os.path.abspath(path),
+                      extension=ext,
+                      extract_command=cmd,
+                      basepath=os.path.basename(path).rstrip(ext),
+                      basedir=os.path.dirname(os.path.abspath(path)))
+
+
+def extract_to_temp(parsed: ParsedPath):
+    extract_dir = os.path.join(parsed.basedir, parsed.basepath + "." + datetime.now().strftime("%Y-%m-%dT%H.%M.%S.%f"))
+    assert not os.path.exists(extract_dir)
+    os.makedirs(extract_dir)
+    with cwd(extract_dir):
+        subprocess.check_output(parsed.extract_command.split() + [parsed.abspath])
+    parsed.extractedpath = extract_dir
+
+
+def outer_dir_check(parsed: ParsedPath):
+    """If path contains a single directory, move all files in that directory up
+    a level and then remove the single directory."""
+    if parsed.extractedpath is None:
+        raise
+    contents = os.listdir(parsed.extractedpath)
+    if len(contents) == 1:
+        candidate = os.path.join(parsed.basedir, contents[0])
+        if not os.path.exists(candidate):
+            os.rename(os.path.join(parsed.extractedpath, contents[0]), candidate)
+            os.rmdir(parsed.extractedpath)
+            parsed.extractedpath = candidate
+
+
+def get_file_count(path):
+    return len(list(scantree(path)))
+
+
+def cull(parsed: ParsedPath):
+    if ARGS.cull is False:
+        return
+    for path in scantree(parsed.extractedpath):
+        head, tail = os.path.split(path.path)
+        parents = head.split('/')
+
+        if tail in "desktop.ini Thumbs.db .DS_Store":
+            pass
+        elif '__MACOSX' in parents:
+            pass
+        else:
+            continue
+
+        print(f"culled: {path.path}")
+        os.remove(path)
+        parsed.culled_count += 1
+
+
+def extract_archive(path) -> ExtractArchiveResult:
+    parsed = parse_path(path)
+    if parsed is None:
+        print(f"encountered an error while extracting: {path}, skipping")
+        raise Exception("TODO: figure out return failure here.")
+
+    extract_to_temp(parsed)
+    outer_dir_check(parsed)
+    cull(parsed)
+
+    finaldir = os.path.basename(parsed.extractedpath)
+    filecount = get_file_count(parsed.extractedpath)
+    return ExtractArchiveResult(finaldir=finaldir, filecount=filecount)
+
+
+class Fail(Exception):
+    pass
+
+
+if __name__ == '__main__':
+    try:
+        ARGS = parse_args()
+        main()
+    except Fail as f:
+        print(*f.args, file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Ctrl+C")

@@ -42,4 +42,7 @@ python.
 |https://github.com/presto8/psc/tree/main/psc[psc]
 | Convenience wrapper for systemctl
 
+|https://github.com/presto8/punar/tree/main/punar[punar]
+|Universal archive extractor.
+
 |===
