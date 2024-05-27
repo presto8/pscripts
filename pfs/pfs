@@ -152,9 +152,8 @@ class Work:
             print(f"{skipped_empty} empty snapshots not shown; run with --all to see")
 
     def locks(self):
-        print(self.fs)
-        for lock in self.fs.locks:
-            print(lock)
+        for pid, details in self.fs.locks.items():
+            print(pid, details)
 
 
 def get_zfs_slop() -> int:
@@ -380,11 +379,18 @@ class Mergerfs:
     def locks(self) -> list[str]:
         if not self.mounted:
             return 0
-        lsof = run("sudo", "lsof", self.mountpoint)
+        lsof = run("sudo", "lsof", "-F", "cn", self.mountpoint)
         if lsof.returncode != 0:
             return 0
-        lock_list = lsof.stdout.strip("\n").split("\n")
-        return lock_list[1:]  # skip header line
+        locks = {}
+        for line in lsof.stdout.strip("\n").split("\n"):
+            code, arg = line[0], line[1:]
+            if code == 'p':
+                process = arg
+                locks[process] = []
+            else:
+                locks[process] += [arg]
+        return locks
 
     @property
     def lock_count(self) -> int:
