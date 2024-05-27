@@ -118,6 +118,8 @@ def hash_and_rsync(from_path, to_path, dest_path):
         raise MoveFail(f"hashes do not match! {from_hashdir} != {to_hashdir}")
 
     os.rename(tmp_contents, dest_path)
+    os.rmdir(tmp_contents)
+
     info(f"hashes match, removing files from {from_path}")
     remove_files(from_path, to_path)
 
