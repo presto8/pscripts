@@ -376,12 +376,12 @@ class Mergerfs:
             return SimpleNamespace(total=total, used=used, avail=avail, unavail=unavail)
 
     @property
-    def locks(self) -> list[str]:
+    def locks(self) -> dict:
         if not self.mounted:
-            return 0
+            return {}
         lsof = run("sudo", "lsof", "-F", "cn", self.mountpoint)
         if lsof.returncode != 0:
-            return 0
+            return {}
         locks = {}
         for line in lsof.stdout.strip("\n").split("\n"):
             code, arg = line[0], line[1:]
