@@ -25,6 +25,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 
 def parse_args():
@@ -77,17 +78,17 @@ def safe_move(from_path, remote, to_path):
 
     check_path_exists(from_path)
     check_path_exists(to_path)
-    dest_path = get_destpath(from_path, to_path)
-    info(f"destination path is available: {dest_path}")
+    paths = get_destpath(from_path, to_path)
+    info(f"destination doesn't exist: {paths.dest_path}")
 
     fail_if_immut(from_path)
 
     from_stat = os.stat(from_path)
     to_stat = os.stat(to_path)
     if from_stat.st_dev == to_stat.st_dev:
-        simple_move(from_path, dest_path)
+        simple_move(from_path, paths.dest_path)
     else:
-        hash_and_rsync(from_path, to_path, dest_path)
+        hash_and_rsync(paths)
 
 
 def simple_move(from_path, dest_path):
@@ -96,34 +97,34 @@ def simple_move(from_path, dest_path):
     info(f"renamed: {from_path} -> {dest_path}")
 
 
-def hash_and_rsync(from_path, to_path, dest_path):
+def hash_and_rsync(paths):
     info("destination is on a different filesystem, using hash and rsync")
-    bytes_needed = fail_if_no_permissions(from_path)
-    fail_if_not_enough_space(bytes_needed, to_path)
+    bytes_needed = fail_if_no_permissions(paths.from_path)
+    fail_if_not_enough_space(bytes_needed, paths.to_path)
 
     while True:
         descriminator = datetime.now().strftime("pmove.tmp.%Y-%m-%dT%H.%M.%S.%f")
-        tmp_path = os.path.join(f"{descriminator}-{dest_path}")
+        tmp_path = os.path.join(paths.to_path, descriminator)
         if not os.path.exists(tmp_path):
             break
 
     os.makedirs(tmp_path)
 
-    from_hashdir = get_nixhash(from_path)
-    rsync_files(from_path, tmp_path)
+    from_hashdir = get_nixhash(paths.from_path)
+    rsync_files(paths.from_path, tmp_path)
 
-    tmp_contents = os.path.join(tmp_path, os.path.basename(from_path))
+    tmp_contents = os.path.join(tmp_path, paths.from_base)
     to_hashdir = get_nixhash(tmp_contents)
     if from_hashdir != to_hashdir:
         raise MoveFail(f"hashes do not match! {from_hashdir} != {to_hashdir}")
 
-    os.rename(tmp_contents, dest_path)
-    os.rmdir(tmp_contents)
+    os.rename(tmp_contents, paths.dest_path)
+    os.rmdir(tmp_path)
 
-    info(f"hashes match, removing files from {from_path}")
-    remove_files(from_path, to_path)
+    info(f"hashes match, removing files from {paths.from_path}")
+    remove_files(paths.from_path, paths.to_path)
 
-    info(f"success: {from_path} -> {dest_path}")
+    info(f"success: {paths.from_path} -> {paths.dest_path}")
 
 
 def fail_if_immut(path):
@@ -176,12 +177,12 @@ def check_path_exists(path):
         raise MoveFail(f"path does not exist: {path}")
 
 
-def get_destpath(from_path, to_path):
+def get_destpath(from_path, to_path) -> SimpleNamespace:
     from_base = os.path.basename(from_path)
     dest_path = os.path.join(to_path, from_base)
     if os.path.exists(dest_path):
         raise MoveFail(f"!! not clobbering existing path: {dest_path}")
-    return dest_path
+    return SimpleNamespace(from_path=from_path, from_base=from_base, dest_path=dest_path, to_path=to_path)
 
 
 def run(*args, **kwargs):
