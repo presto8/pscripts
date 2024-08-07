@@ -31,6 +31,7 @@ def get_url(url):
         "--trim-filenames=200",  # Limit filename length
         "--embed-metadata",      # Embed all available metadata in the output file
         "--merge-output-format=mkv",  # Use mkv which allows unlimited metadata
+        "--write-subs",          # Save subtitles
         "-o", output_template
     ]
     print(args)
