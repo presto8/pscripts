@@ -77,6 +77,24 @@ main() {
             sudo vi /etc/nixos/"$HOSTNAME"/default.nix
             ;;
     esac
+
+    random_check_for_old_generations
+}
+
+random_check_for_old_generations() {
+    if (( RANDOM % 10 != 0 )); then
+        return
+    fi
+
+    num_sys_gens=$(run_sudo nix-env -p /nix/var/nix/profiles/system --list-generations | grep -c '^')
+    if (( num_sys_gens > 10 )); then
+        info "$num_sys_gens system generations is over the limit of 10"
+    fi
+
+    num_hm_gens=$(run_user home-manager generations | grep -c '^')
+    if (( num_hm_gens > 10 )); then
+        info "$num_hm_gens home manager generations is over the limit of 10"
+    fi
 }
 
 run_du() {
