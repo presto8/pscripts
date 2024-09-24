@@ -14,6 +14,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('urls', nargs='*', help='urls to download')
+    parser.add_argument('--extract-audio', '-x', action='store_true', help='audio only')
 
     return parser.parse_args()
 
@@ -24,16 +25,28 @@ def main():
 
 
 def get_url(url):
-    output_template = "%(title)s [%(channel)s %(id)s]"
     args = [
         "yt-dlp", url,
         "--restrict-filenames",  # Only ASCII characters, avoid "&" and spaces in filenames
         "--trim-filenames=200",  # Limit filename length
         "--embed-metadata",      # Embed all available metadata in the output file
-        "--merge-output-format=mkv",  # Use mkv which allows unlimited metadata
-        "--write-subs",          # Save subtitles
-        "-o", output_template
+        "--output", output_template
     ]
+
+    if ARGS.extract_audio:
+        args += [
+            "--extract-audio",
+            "--embed-thumbnail",
+            "--convert-thumbnail", "jpg",
+            "--output", "%(artist)s - %(title)s.%(ext)s"
+        ]
+    else:
+        args += [
+            "--merge-output-format=mkv",  # Use mkv which allows unlimited metadata
+            "--write-subs",               # Save subtitles
+            "--output", "%(title)s [%(channel)s %(id)s]"
+        ]
+
     print(args)
     subprocess.run(args)
 
