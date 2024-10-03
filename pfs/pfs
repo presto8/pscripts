@@ -557,7 +557,7 @@ def delete_snapshots_in_range(pools, after: datetime, up_to_and_including: datet
     for pool in pools:
         for snapshot in pool.snapshots:
             if after < snapshot.creation <= up_to_and_including:
-                if "zfs-auto-snap" not in snapshot.name:
+                if "zfs-auto-snap" not in snapshot.name and "znap" not in snapshot.name:
                     print(f"skipping {snapshot.name}")
                 else:
                     print(f"zfs destroy {snapshot.name}")
