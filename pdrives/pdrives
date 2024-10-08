@@ -279,7 +279,13 @@ class DriveInfoThread(threading.Thread):
 
 
 def get_drive_info(drivepath) -> DriveInfo | None:
-    j = run_smartctl("-a", drivepath, "-T", "permissive")
+    cmd = ["-a", drivepath, "-T", "permissive"]
+    j = run_smartctl(*cmd)
+
+    for message in j['smartctl'].get('messages', {}):
+        if 'Unknown USB' in message['string'] and drivepath.startswith('/dev/sd'):
+            cmd += ["-d", "sat"]
+            j = run_smartctl(*cmd)
 
     if j['smartctl']['exit_status'] & 0x2:
         print(f"{drivepath}: unable to get SMART info")
