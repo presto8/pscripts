@@ -6,6 +6,7 @@ help() {
 # usage: pnix <command> [options]
 #
 #    all         same as optimize + collect
+#    boot        run "/etc/nixos/build boot"
 #    build       run "/etc/nixos/build"
 #    gc          run "sudo nix-collect-garbage" and "nix-collect-garbage" (as user)
 #    rm N        run "sudo nix-env -p /nix/var/nix/profiles/system --delete-generations N"
@@ -36,6 +37,9 @@ main() {
         help)
             help
             exit 0
+            ;;
+        boot)
+            /etc/nixos/build boot
             ;;
         build)
             /etc/nixos/build "$@"
