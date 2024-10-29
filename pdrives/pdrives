@@ -248,6 +248,10 @@ def get_failing_smart_attributes(j) -> list[str]:
             raw = attr['raw']['value']
             if raw > 0:
                 result.append(f"{raw}-pending-sectors")
+        elif attr['id'] == 198:  # offline uncorrectable - any number is bad
+            raw = attr['raw']['value']
+            if raw > 0:
+                result.append(f"{raw}-offline-uncorrectable")
     return result
 
 
