@@ -48,12 +48,12 @@ def main():
 
     if ARGS.test:
         for analysis in analyses:
-            devname = analysis.info.path
+            drive = analysis.info
             if 'short-selftest-overdue' in analysis.alerts:
-                run_smartctl(devname, "-t", "short")
+                drive.run_smartctl("-t", "short")
                 analysis.print("started short-selftest")
             elif 'long-selftest-overdue' in analysis.alerts or 'long-selftest-failed' in analysis.alerts:
-                run_smartctl(devname, "-t", "long")
+                drive.run_smartctl("-t", "long")
                 analysis.print("started long-selftest")
                 start_keep_alive(analysis)
     elif ARGS.badblocks:
@@ -118,6 +118,13 @@ class DriveInfo(NamedTuple):
     selftest: AtaSelfTest | None
     nvmhealth: NvmHealth | None
     badblocks_running: str | None
+    type: str | None
+
+    def run_smartctl(self, *args):
+        args = list(args) + [self.path]
+        if self.type:
+            args += ["-d", self.type]
+        run_smartctl(*args)
 
 
 class DriveAnalysis(NamedTuple):
@@ -283,11 +290,14 @@ class DriveInfoThread(threading.Thread):
 
 
 def get_drive_info(drivepath) -> DriveInfo | None:
+    result = dict(path=drivepath, type=None)
+
     cmd = ["-a", drivepath, "-T", "permissive"]
     j = run_smartctl(*cmd)
 
     for message in j['smartctl'].get('messages', {}):
         if 'Unknown USB' in message['string'] and drivepath.startswith('/dev/sd'):
+            result['type'] = "sat"
             cmd += ["-d", "sat"]
             j = run_smartctl(*cmd)
 
@@ -298,7 +308,6 @@ def get_drive_info(drivepath) -> DriveInfo | None:
     if ARGS.debug:
         print(json.dumps(j, indent=4))
 
-    result = dict(path=drivepath)
     result['name'] = drivepath.split('/')[-1]
     result['model'] = j.get('model_family', j.get('model_name', 'Unknown'))
     try:
