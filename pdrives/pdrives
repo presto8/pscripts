@@ -124,7 +124,7 @@ class DriveInfo(NamedTuple):
         args = list(args) + [self.path]
         if self.type:
             args += ["-d", self.type]
-        run_smartctl(*args)
+        return run_smartctl(*args)
 
 
 class DriveAnalysis(NamedTuple):
