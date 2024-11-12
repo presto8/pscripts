@@ -38,10 +38,13 @@ def parse_args():
 
 def main():
     remote = None
-    if ':' in ARGS.to_path:
-        remote, _, to_path = ARGS.to_path.partition(':')
-    else:
-        to_path = os.path.abspath(ARGS.to_path)
+    # FIXME: This doesn't work if the path contains a ':', need to figure out
+    # the best way to handle this
+    # if ':' in ARGS.to_path:
+    #     remote, _, to_path = ARGS.to_path.partition(':')
+    # else:
+    #     to_path = os.path.abspath(ARGS.to_path)
+    to_path = os.path.abspath(ARGS.to_path)
 
     for from_path in ARGS.from_paths:
         from_path = os.path.abspath(from_path)
