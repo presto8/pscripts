@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
 # Inspired by: https://github.com/carnager/rofi-pass
+#
+# Save most recently selected entry and put it first in the list.
+# Shallow display of entries (top dirs, then subdirs)
 
 set -Eeu -o pipefail
 
@@ -50,6 +53,10 @@ get_field() {
 
 setup() {
     declare -g MODE=${MODE:-pass}
+    local config=${XDG_CONFIG_HOME:-$HOME/.config}
+    local configrofi="$config/p-rofi-pass"
+    mkdir -p "$configrofi"
+    declare -g LAST_SELECTION="$configrofi/last-selection"
 }
 
 check_deps() {
@@ -69,7 +76,7 @@ do_rofi() {
     )
     local -i rofi_ret=0
     ROFI_SELECTION=$(list_passwords | "${cmd[@]}") || rofi_ret=$?
-    # evaluate_rofi_rc $rofi_ret
+    echo "$ROFI_SELECTION" > "$LAST_SELECTION"
 }
 
 evaluate_rofi_rc() {
@@ -89,15 +96,21 @@ do_type() {
 
 
 listgpg() {
-    mapfile -d '' pw_list < <(find -L . -name '*.gpg' -print0)
-    pw_list=("${pw_list[@]#./}")
-    printf '%s\n' "${pw_list[@]}" | sort -n
+    # display last selection if available
+    if [[ -e "$LAST_SELECTION" ]]; then
+        cat "$LAST_SELECTION"
+    fi
+
+    # display top-level files
+    find . -maxdepth 1 -mindepth 1 -name '*.gpg' -printf '%P\n' | sort -n
+
+    # display subdirs
+    find . -mindepth 2 -name '*.gpg' -printf '%P\n' | sort -n
 }
 
 # get all password files and output as newline-delimited text
 list_passwords() {
-    mapfile -t pw_list < <(listgpg)
-    printf '%s\n' "${pw_list[@]%.gpg}" | sort -n
+    listgpg | sed 's/\.gpg$//'
 }
 
 die() { echo "!! $*"; exit 1; }
