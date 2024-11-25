@@ -134,9 +134,9 @@ def fail_if_immut(path):
     info("checking for immutable files")
     result = run(["find", path, "-exec", "lsattr", "-d", "{}", ";"])
     found = False
-    for entry in result.stdout.split("\n"):
-        attr, _, relpath = entry.partition(" ")
-        if "i" in attr:
+    for entry in result.stdout.split(b"\n"):
+        attr, _, relpath = entry.partition(b" ")
+        if b"i" in attr:
             info("\t" + entry)
             found = True
 
@@ -189,7 +189,7 @@ def get_destpath(from_path, to_path) -> SimpleNamespace:
 
 
 def run(*args, **kwargs):
-    result = subprocess.run(*args, **kwargs, capture_output=True, text=True)
+    result = subprocess.run(*args, **kwargs, capture_output=True)
     if result.returncode != 0:
         raise Fail(result)
     return result
