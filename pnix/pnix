@@ -11,6 +11,7 @@ help() {
 #    gc          run "sudo nix-collect-garbage" and "nix-collect-garbage" (as user)
 #    rm N        run "sudo nix-env -p /nix/var/nix/profiles/system --delete-generations N"
 #    rm id N     run "nix-env --delete-generations"
+#    rm auto     remove all but 10 system generations and home-manager generations
 #    du          show disk usage of generations and profiles
 #    list        run "sudo nix-env -p /nix/var/nix/profiles/system --list-generations"
 #    optimize    run "sudo nix-store --optimise"
@@ -51,7 +52,7 @@ main() {
             run_sudo nix-collect-garbage
             run_user nix-collect-garbage
             ;;
-        l*)
+        ls)
             run_sudo nix-env -p /nix/var/nix/profiles/system --list-generations
             run_user home-manager generations
             ;;
@@ -59,12 +60,21 @@ main() {
             run_sudo nix-store --optimise
             ;;
         rm)
-            if [[ ${1:-} == "id" ]]; then
-                shift
-                run_user home-manager remove-generations "$@"
-            else
-                run_sudo nix-env -p /nix/var/nix/profiles/system --delete-generations "$@"
-            fi
+            case ${1:-} in
+                id)
+                    shift
+                    run_user home-manager remove-generations "$@"
+                    ;;
+                auto)
+                    do_rm_auto
+                    ;;
+                "")
+                    echo "usage: pnix rm n [...] | id n [...] | auto"
+                    ;;
+                *)
+                    run_sudo nix-env -p /nix/var/nix/profiles/system --delete-generations "$@"
+                    ;;
+            esac
             ;;
         switch)
             /etc/nixos/build switch
@@ -85,19 +95,41 @@ main() {
     random_check_for_old_generations
 }
 
+
+do_rm_auto() {
+    mapfile genlist < <(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | tac)
+    mapfile hmlist < <(home-manager generations)
+
+    for sysgen in "${genlist[@]:10}"; do
+        local id=$(echo $sysgen | awk '{ print $1 }')
+        run_sudo nix-env -p /nix/var/nix/profiles/system --delete-generations "$id"
+    done
+
+    for hmgen in "${hmlist[@]:10}"; do
+        local id=$(echo $hmgen | awk '{ print $5 }')
+        run_user home-manager remove-generations "$id"
+    done
+
+    exit 99
+}
+
 random_check_for_old_generations() {
     if (( RANDOM % 10 != 0 )); then
         return
     fi
 
-    num_sys_gens=$(run_sudo nix-env -p /nix/var/nix/profiles/system --list-generations | grep -c '^')
+    num_sys_gens=$(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | grep -c '^')
     if (( num_sys_gens > 10 )); then
         info "$num_sys_gens system generations is over the limit of 10"
     fi
 
-    num_hm_gens=$(run_user home-manager generations | grep -c '^')
+    num_hm_gens=$(home-manager generations | grep -c '^')
     if (( num_hm_gens > 10 )); then
         info "$num_hm_gens home manager generations is over the limit of 10"
+    fi
+
+    if (( num_hm_gens > 10 || num_sys_gens > 10 )); then
+        info "run 'pnix rm auto' to automatically remove old generations above 10"
     fi
 }
 
