@@ -25,13 +25,13 @@ from typing import NamedTuple, Generator
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('query', nargs='*', help='search query')
-    parser.add_argument('--debug', action='store_true', help='show detailed debugging messages')
-    parser.add_argument('--raw', action='store_true', help='show raw smartctl output')
-    parser.add_argument('--full', action='store_true', help='show full drive details')
-    parser.add_argument('--test', action='store_true', help='start any needed tests')
     parser.add_argument('--badblocks', action='store_true', help='run badblocks in non-destructive mode')
-    parser.add_argument('--selftest-short-overdue-days', type=int, default=2, help='short selftest overdue after this many days')
+    parser.add_argument('--debug', action='store_true', help='show detailed debugging messages')
+    parser.add_argument('--full', action='store_true', help='show full drive details')
+    parser.add_argument('--raw', action='store_true', help='show raw smartctl output')
     parser.add_argument('--selftest-long-overdue-days', type=int, default=28, help='long selftest overdue after this many days')
+    parser.add_argument('--selftest-short-overdue-days', type=int, default=2, help='short selftest overdue after this many days')
+    parser.add_argument('--test', action='store_true', help='start any needed tests')
     return parser.parse_args()
 
 
