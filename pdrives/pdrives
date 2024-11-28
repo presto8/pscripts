@@ -59,6 +59,9 @@ def main():
     elif ARGS.badblocks:
         for analysis in analyses:
             run_badblocks(analysis)
+    elif ARGS.raw:
+        for analysis in analyses:
+            print(analysis.info.run_smartctl("-a"))
     else:
         display_status(analyses)
 
@@ -66,8 +69,6 @@ def main():
 def get_drive_info_parallel():
     threads = []
     for path in get_drive_paths():
-        if ARGS.raw:
-            subprocess.run(["sudo", "smartctl", "-a", path])
         debug(path, "getting info")
         t = DriveInfoThread(path)
         t.start()
