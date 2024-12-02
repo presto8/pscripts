@@ -447,9 +447,10 @@ def get_drive_paths() -> Generator[str, None, None]:
 
 
 def start_keep_alive(analysis):
+    extra = f"-d {analysis.info.type}" if analysis.info.type else ""
     cmd = ["bash", "-x", "-c", f"""
     while sleep 60s; do
-        if ! sudo smartctl -a {analysis.info.path} | grep 'of test remaining'; then
+        if ! sudo smartctl -a {analysis.info.path} {extra} | grep 'of test remaining'; then
             break
         fi
         sudo dd if={analysis.info.path} iflag=direct count=1 of=/dev/null
