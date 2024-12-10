@@ -183,7 +183,7 @@ class Snapshot:
 class Pool:
     pool: str
     dataset: str | None = None
-    readonly: bool = False
+    branchmode: str | None = None
 
     def __post_init__(self) -> None:
         self.snapshots: list[Snapshot] = []
@@ -217,6 +217,10 @@ class Pool:
         if self.dataset:
             name += "/" + self.dataset
         return name
+
+    @property
+    def readonly(self):
+        return self.branchmode in "ro nc".split()
 
     @property
     def imported(self):
@@ -270,6 +274,8 @@ class Pool:
             props_to_check['readonly'] = "on"
             props_to_check['com.sun:auto-snapshot'] = "false"
 
+        props_to_check.update(self.zfs_properties)
+
         for field, value in props_to_check.items():
             self.check_property(field, value)
 
@@ -292,6 +298,13 @@ class Pool:
     @property
     def mountpoint(self):
         return self.get("mountpoint")
+
+    @property
+    def mountpoint_with_branchmode(self):
+        result = self.get("mountpoint")
+        if self.branchmode:
+            result += "=" + self.branchmode
+        return result
 
     def mount(self, passphrase):
         if not self.mounted:
@@ -347,6 +360,7 @@ class Mergerfs:
     warn_low_gb: int | None = None
     warn_days_without_snapshot: int | None = None
     zfs_slop: int = 5
+    zfs_properties: dict[str, str] | None = None
 
     def __post_init__(self):
         self._generations = None
@@ -600,14 +614,21 @@ def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
         s = config[name]
         pools = []
         for poolspec in s['pools'].split():
-            first, sep, flags = poolspec.partition(':')
+            first, sep, branchmode = poolspec.partition('=')
             poolname, sep, dataset = first.partition('/')
             pool = Pool(pool=poolname)
             if dataset:
                 pool.dataset = dataset
-            if "ro" in flags:
-                pool.readonly = True
+            if branchmode:
+                if branchmode not in "RW RO NC".split():
+                    raise Fail("branchmode must be rw, ro, or nc")
+                pool.branchmode = branchmode
             pools.append(pool)
+
+        zfs_properties = {}
+        for zfsprop in s['zfs_properties'].split():
+            key, val = zfsprop.split('=')
+            zfs_properties[key] = val
 
         yield Mergerfs(
             name=name,
@@ -615,7 +636,8 @@ def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
             warn_low_gb=int(s['warn_low_gb']),
             warn_days_without_snapshot=int(s['warn_days_without_snapshot']),
             pools=pools,
-            zfs_slop=int(s['zfs_slop'])
+            zfs_slop=int(s['zfs_slop']),
+            zfs_properties=zfs_properties,
         )
 
 
