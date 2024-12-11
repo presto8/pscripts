@@ -35,11 +35,12 @@ def parse_args():
     add_command('unmount', help='mount filesystem')
     add_command('list', help='list filesystem/mergerfs info')
     add_command('locks', help='show locks on filesystems')
-    add_command('snapshots', help='list snapshots')
+
+    x = add_command('snapshots', help='list snapshots')
+    x.add_argument('--delete-oldest', '-d', default=False, action='store_true', help='delete oldest snapshot')
 
     parser.add_argument('--config', '-c', default=f"/etc/pfs.conf", help='use this config file')
     parser.add_argument('--verbose', '-v', default=False, action='store_true', help='show more detailed messages')
-    parser.add_argument('--delete-oldest', '-d', default=False, action='store_true', help='delete oldest snapshot')
     parser.add_argument('--free-gb', '-f', default=False, type=int, required=False, help='delete snapshots until specified free space')
 
     resolve_partial_command(commands)
@@ -74,10 +75,6 @@ def process_fs(fs):
 
     if ARGS.command:
         work.command(ARGS.command)
-    elif ARGS.delete_oldest:
-        print(f': "{fs}"')
-        delete_oldest_snapshots(fs.pools)
-        return 0
     elif ARGS.free_gb:
         delete_until_free(fs, ARGS.free_gb)
         return 0
@@ -142,6 +139,11 @@ class Work:
         current_slop = get_zfs_slop()
 
     def snapshots(self):
+        if ARGS.delete_oldest:
+            print(f': "{self.fs}"')
+            delete_oldest_snapshots(self.fs.pools)
+            return 0
+
         skipped_empty = 0
         for generation in self.fs.snapshot_generations:
             if generation.bytes_used == 0:
