@@ -57,7 +57,8 @@ def main():
             raise Fail(f"unhandled: {parts}")
 
     print("All changed or added files were exported")
-    print(f"Snapshot {ARGS.newer_snapshot} can be deleted now")
+    print(f"Snapshot {ARGS.newer_snapshot} can be deleted now:")
+    print(f": sudo zfs destroy {ARGS.newer_snapshot}")
 
 
 def format_summary():
