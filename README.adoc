@@ -45,4 +45,7 @@ python.
 |https://github.com/presto8/punar/tree/main/punar[punar]
 |Universal archive extractor.
 
+|https://github.com/presto8/pscripts/tree/main/p-zfs-diff-export[p-zfs-diff-export]
+|Export changed or added files between ZFS snapshots
+
 |===
