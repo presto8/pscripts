@@ -42,10 +42,10 @@ python.
 |https://github.com/presto8/psc/tree/main/psc[psc]
 | Convenience wrapper for systemctl
 
-|https://github.com/presto8/punar/tree/main/punar[punar]
+|https://github.com/presto8/pscripts/tree/main/punar[punar]
 |Universal archive extractor.
 
 |https://github.com/presto8/pscripts/tree/main/p-zfs-diff-export[p-zfs-diff-export]
-|Export changed or added files between ZFS snapshots
+|Export changed or added files between ZFS snapshots.
 
 |===
