@@ -30,7 +30,6 @@ def get_url(url):
         "--restrict-filenames",  # Only ASCII characters, avoid "&" and spaces in filenames
         "--trim-filenames=200",  # Limit filename length
         "--embed-metadata",      # Embed all available metadata in the output file
-        "--output", "%(title)s [%(channel)s %(id)s]"
     ]
 
     if ARGS.extract_audio:
@@ -44,7 +43,7 @@ def get_url(url):
         args += [
             "--merge-output-format=mkv",  # Use mkv which allows unlimited metadata
             "--write-subs",               # Save subtitles
-            "--output", "%(title)s [%(channel)s %(id)s]"
+            "--output", "%(uploader)s [content id %(id)s]"
         ]
 
     print(args)
