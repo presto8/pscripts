@@ -165,7 +165,7 @@ def fail_if_not_enough_space(bytes_needed, path):
 
 def remove_files(from_path, to_path):
     result = run(["rsync", "-a", "--info=name", from_path, to_path, "--remove-source-files"])
-    if result.stdout != '':
+    if result.stdout:
         raise MoveFail(result)
     if os.path.isdir(from_path):
         # remove empty directories left behind by rsync
