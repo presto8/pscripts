@@ -1,5 +1,4 @@
-#!/usr/bin/env nix-shell
-#! nix-shell -p smartmontools -i python3
+#!/usr/bin/env python3
 
 """pdrives by Preston Hunt <me@prestonhunt.com>
 
@@ -32,6 +31,7 @@ def parse_args():
     parser.add_argument('--selftest-long-overdue-days', type=int, default=28, help='long selftest overdue after this many days')
     parser.add_argument('--selftest-short-overdue-days', type=int, default=2, help='short selftest overdue after this many days')
     parser.add_argument('--test', action='store_true', help='start any needed tests')
+    parser.add_argument('--routine', action='store_true', help='run routine tasks, intended to be run daily as a scheduled task')
     return parser.parse_args()
 
 
@@ -46,16 +46,10 @@ def main():
         if analysis.match(*ARGS.query):
             analyses.append(analysis)
 
+    if ARGS.routine:
+        do_routine_tasks(analyses)
     if ARGS.test:
-        for analysis in analyses:
-            drive = analysis.info
-            if 'short-selftest-overdue' in analysis.alerts:
-                drive.run_smartctl("-t", "short")
-                analysis.print("started short-selftest")
-            elif 'long-selftest-overdue' in analysis.alerts or 'long-selftest-failed' in analysis.alerts:
-                drive.run_smartctl("-t", "long")
-                analysis.print("started long-selftest")
-                start_keep_alive(analysis)
+        do_self_tests(analyses)
     elif ARGS.badblocks:
         for analysis in analyses:
             run_badblocks(analysis)
@@ -68,7 +62,10 @@ def main():
 
 def get_drive_info_parallel():
     threads = []
+    drives_query = list(get_drives_query())
     for path in get_drive_paths():
+        if drives_query and path not in drives_query:
+            continue
         debug(path, "getting info")
         t = DriveInfoThread(path)
         t.start()
@@ -78,6 +75,14 @@ def get_drive_info_parallel():
         t.join()
 
     return [t.result for t in threads if t.result]
+
+
+def get_drives_query():
+    for q in ARGS.query:
+        if len(q) == 3 and q.startswith('sd'):
+            yield f"/dev/{q}"
+        elif len(q) == 7 and q.startswith('nvme'):
+            yield f"/dev/{q}"
 
 
 def debug(*args, **kwargs):
@@ -158,6 +163,22 @@ class DriveStatus(enum.Enum):
     degraded = 2
     critical = 3
     failing = 4
+
+
+def do_routine_tasks(analyses: list[DriveAnalysis]):
+    do_self_tests(analyses)
+
+
+def do_self_tests(analyses: list[DriveAnalysis]):
+    for analysis in analyses:
+        drive = analysis.info
+        if 'short-selftest-overdue' in analysis.alerts:
+            drive.run_smartctl("-t", "short")
+            analysis.print("started short-selftest")
+        elif 'long-selftest-overdue' in analysis.alerts or 'long-selftest-failed' in analysis.alerts:
+            drive.run_smartctl("-t", "long")
+            analysis.print("started long-selftest")
+            start_keep_alive(analysis)
 
 
 def format_status(d: DriveInfo, alerts: str) -> str:
