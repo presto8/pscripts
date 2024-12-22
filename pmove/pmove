@@ -198,7 +198,7 @@ def run(*args, **kwargs):
 def get_nixhash(path):
     info(f"getting nix-hash for: {path}")
 
-    result = run(["nix-hash", path])
+    result = run(["nix-hash", path], text=True)
     parts = result.stdout.split()
     hashresult = parts[0]
     info(f"{hashresult}")
