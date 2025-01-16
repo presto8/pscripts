@@ -417,7 +417,7 @@ def get_nvmhealth(j) -> NvmHealth | None:
 
 
 def run_smartctl(*args, retries=3):
-    cmd = ["sudo", "smartctl", "--json", *args]
+    cmd = maybe_root(["smartctl", "--json", *args])
     # Sometimes smartctl doesn't run properly, but running it again a second
     # time will work.
     while retries > 0:
@@ -437,7 +437,7 @@ def run_badblocks(analysis):
         analysis.print("badblocks already running")
         return
     logfp = open(BADBLOCKS_LOG_TEMPLATE.format(analysis.info.name), "w")
-    cmd = f"sudo badblocks -b 4096 -n -s {analysis.info.path}".split()
+    cmd = maybe_root(f"badblocks -b 4096 -n -s {analysis.info.path}".split())
     subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
     analysis.print(f"started badblocks in background, logging output to: {logfp.name}")
 
@@ -455,7 +455,9 @@ def badblocks_running(name) -> str | None:
 
 
 def run_lsblk(*args):
-    result = subprocess.run(["sudo", "lsblk", "--json", "--output", "name,label,fstype", *args], capture_output=True)
+    result = subprocess.run(maybe_root(["lsblk", "--json", "--output", "name,label,fstype", *args]), capture_output=True)
+    if result.returncode != 0 or result.stderr:
+        print(result)
     return json.loads(result.stdout)
 
 
@@ -469,17 +471,23 @@ def get_drive_paths() -> Generator[str, None, None]:
 
 def start_keep_alive(analysis):
     extra = f"-d {analysis.info.type}" if analysis.info.type else ""
-    cmd = ["bash", "-x", "-c", f"""
+    cmd = maybe_root(["bash", "-x", "-c", f"""
     while sleep 60s; do
-        if ! sudo smartctl -a {analysis.info.path} {extra} | grep 'of test remaining'; then
+        if ! smartctl -a {analysis.info.path} {extra} | grep 'of test remaining'; then
             break
         fi
-        sudo dd if={analysis.info.path} iflag=direct count=1 of=/dev/null
+        dd if={analysis.info.path} iflag=direct count=1 of=/dev/null
     done
-    """]
+    """])
     logfp = open(f"/tmp/pdrives-keepalive-{analysis.info.name}", "w")
     subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
     analysis.print("started background keep-alive")
+
+
+def maybe_root(args):
+    if os.geteuid() != 0:
+        args.insert(0, "sudo")
+    return args
 
 
 class Fail(Exception):
