@@ -262,7 +262,7 @@ class Pool:
         if self.get(field) != wantvalue:
             print(run("sudo", "zfs", "set", f"{field}={wantvalue}", self.name))
 
-    def check_properties(self):
+    def check_properties(self, zfs_properties):
         props_to_check = {
             "com.sun:auto-snapshot": "true",
             "relatime": "on",
@@ -308,7 +308,7 @@ class Pool:
             result += "=" + self.branchmode
         return result
 
-    def mount(self, passphrase):
+    def mount(self, passphrase, zfs_properties):
         if not self.mounted:
             if self.import_():
                 self.load_key(passphrase)
@@ -489,7 +489,7 @@ class Mergerfs:
             while not pool.mounted:
                 # try existing passphrases
                 for pw in PASSMGR.passphrases:
-                    if pool.mount(pw):
+                    if pool.mount(pw, self.zfs_properties):
                         break
                 else:
                     # prompt for a new passphrase and try again
@@ -521,7 +521,7 @@ class Mergerfs:
                 "moveonenospc=true",       # documenting for clarity, defaults to true with mfs anyway
             )
             opts = ",".join(mergerfs_options)
-            paths = ":".join(x.mountpoint for x in self.pools)
+            paths = ":".join(x.mountpoint_with_branchmode for x in self.pools)
             print("sudo", "mergerfs", "-o", opts, paths, self.mountpoint)
             run("sudo", "mergerfs", "-o", opts, paths, self.mountpoint)
 
