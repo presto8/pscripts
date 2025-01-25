@@ -11,6 +11,7 @@ import getpass
 import os
 import select
 import shutil
+import shlex
 import subprocess
 import sys
 import time
@@ -363,6 +364,7 @@ class Mergerfs:
     warn_days_without_snapshot: int | None = None
     zfs_slop: int = 5
     zfs_properties: dict[str, str] | None = None
+    actions: list[str] | None = None
 
     def __post_init__(self):
         self._generations = None
@@ -412,17 +414,31 @@ class Mergerfs:
     def lock_count(self) -> int:
         return len(self.locks)
 
+    def do_action(self, name):
+        try:
+            action = self.actions[name]
+        except KeyError:
+            return
+        cmd = shlex.shlex(action, posix=True)
+        cmd.whitespace_split = True
+        cmd = list(cmd)
+        result = run(*cmd)
+        if result.returncode != 0:
+            print(f'!! action {name} failed: {result}')
 
     def mount(self):
         if not self.mounted:
             self._mount_pools()
             self._mount_mergerfs()
+            self.do_action('post_mount')
         return self.mounted
 
     def unmount(self):
-        self._fail_if_mountpoint_in_use()
-        self._unmount_mergerfs()
-        self._unmount_pools()
+        if self.mounted:
+            self.do_action('pre_unmount')
+            self._fail_if_mountpoint_in_use()
+            self._unmount_mergerfs()
+            self._unmount_pools()
         return not self.mounted
 
     @property
@@ -632,6 +648,10 @@ def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
             key, val = zfsprop.split('=')
             zfs_properties[key] = val
 
+        actions = {}
+        for key in "post_mount pre_unmount".split():
+            actions[f'{key}'] = s.get(f'{key}_action', None)
+
         yield Mergerfs(
             name=name,
             mountpoint=s['mountpoint'],
@@ -640,6 +660,7 @@ def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
             pools=pools,
             zfs_slop=int(s['zfs_slop']),
             zfs_properties=zfs_properties,
+            actions=actions,
         )
 
 
