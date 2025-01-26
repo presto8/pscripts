@@ -644,7 +644,7 @@ def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
             pools.append(pool)
 
         zfs_properties = {}
-        for zfsprop in s['zfs_properties'].split():
+        for zfsprop in s.get('zfs_properties', '').split():
             key, val = zfsprop.split('=')
             zfs_properties[key] = val
 
