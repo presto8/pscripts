@@ -147,11 +147,17 @@ def fail_if_immut(path):
 def fail_if_no_permissions(path) -> int:
     info("checking for file access permissions")
     total_bytes = 0
+    fails = []
     for entry in scantree(path):
         if not os.access(entry, os.R_OK | os.W_OK) and not entry.is_symlink():
-            raise MoveFail(f"don't have read/write access to {entry}")
+            fails += [str(entry)]
+            continue
+            # raise MoveFail(f"don't have read/write access to {entry}")
         pathstat = entry.stat(follow_symlinks=False)
         total_bytes += pathstat.st_size
+    if fails:
+        fails_fmt = "\n".join(fails)
+        raise MoveFail(f"don't have read/write access to:\n{fails_fmt}")
     info(f"{total_bytes:,} bytes to move")
     return total_bytes
 
