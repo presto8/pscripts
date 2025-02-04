@@ -277,7 +277,7 @@ class Pool:
             props_to_check['readonly'] = "on"
             props_to_check['com.sun:auto-snapshot'] = "false"
 
-        props_to_check.update(self.zfs_properties)
+        props_to_check.update(zfs_properties)
 
         for field, value in props_to_check.items():
             self.check_property(field, value)
@@ -314,7 +314,7 @@ class Pool:
             if self.import_():
                 self.load_key(passphrase)
                 run("sudo", "zfs", "mount", self.name)
-                self.check_properties()
+                self.check_properties(zfs_properties)
         return self.mounted
 
     def unmount(self):
