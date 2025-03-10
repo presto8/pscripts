@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument('--selftest-long-overdue-days', type=int, default=28, help='long selftest overdue after this many days (default 28)')
     parser.add_argument('--selftest-short-overdue-days', type=int, default=2, help='short selftest overdue after this many days (default 2)')
     parser.add_argument('--test', action='store_true', help='start any needed tests')
+    parser.add_argument('--no-pause-hd-idle', action='store_true', help='pause hd-idle (if running) during long selftests (default on)')
     parser.add_argument('--routine', action='store_true', help='run routine tasks, intended to be run daily as a scheduled task')
     return parser.parse_args()
 
@@ -470,18 +471,25 @@ def get_drive_paths() -> Generator[str, None, None]:
 
 
 def start_keep_alive(analysis):
+    if ARGS.no_pause_hd_idle:
+        return
+    result = subprocess.run(maybe_root(["systemctl", "is-active", "hd-idle"]), capture_output=True)
+    if result.returncode != 0 or result.stderr:
+        # hd-idle not active
+        return
     extra = f"-d {analysis.info.type}" if analysis.info.type else ""
     cmd = maybe_root(["bash", "-x", "-c", f"""
-    while sleep 60s; do
+    trap "systemctl start hd-idle" EXIT
+    systemctl stop hd-idle
+    while sleep 5m; do
         if ! smartctl -a {analysis.info.path} {extra} | grep 'of test remaining'; then
             break
         fi
-        dd if={analysis.info.path} iflag=direct count=1 of=/dev/null
     done
     """])
     logfp = open(f"/tmp/pdrives-keepalive-{analysis.info.name}", "w")
     subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=logfp, stderr=subprocess.STDOUT, start_new_session=True)
-    analysis.print("started background keep-alive")
+    analysis.print("disabled hd-idle until selftest completes; see log at", logfp.name)
 
 
 def maybe_root(args):
