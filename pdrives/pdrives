@@ -171,7 +171,11 @@ def do_routine_tasks(analyses: list[DriveAnalysis]):
 
 
 def do_self_tests(analyses: list[DriveAnalysis]):
-    for analysis in analyses:
+    keepalive_started = False
+    # sort the drives by drive size with the largest first
+    # then start the keep alive for the biggest drive only
+    # in theory, it will run the longest
+    for analysis in sorted(analyses, key=lambda x: float(x.tb), reverse=True):
         drive = analysis.info
         if 'short-selftest-overdue' in analysis.alerts:
             drive.run_smartctl("-t", "short")
@@ -179,7 +183,9 @@ def do_self_tests(analyses: list[DriveAnalysis]):
         elif 'long-selftest-overdue' in analysis.alerts or 'long-selftest-failed' in analysis.alerts:
             drive.run_smartctl("-t", "long")
             analysis.print("started long-selftest")
-            start_keep_alive(analysis)
+            if not keepalive_started:
+                start_keep_alive(analysis)
+                keepalive_started = True
 
 
 def format_status(d: DriveInfo, alerts: str) -> str:
