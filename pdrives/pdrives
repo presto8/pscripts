@@ -223,8 +223,8 @@ def format_alert(d: DriveInfo) -> str:
         if d.nvmhealth.available_spare < 100:
             alerts += ["available-spare-{d.nvmhealth.available_spare}%"]
 
-    if d.badblocks_running:
-        alerts += [f"badblocks-running-{d.badblocks_running}"]
+    if d.badblocks_running is not None:
+        alerts += [f"badblocks-running{d.badblocks_running}"]
 
     return " ".join(alerts)
 
@@ -454,11 +454,14 @@ def badblocks_running(name) -> str | None:
     if result.returncode != 0:
         return None
 
-    with open(BADBLOCKS_LOG_TEMPLATE.format(name), "r") as f:
-        status = f.read()
+    try:
+        with open(BADBLOCKS_LOG_TEMPLATE.format(name), "r") as f:
+            status = f.read()
+    except FileNotFoundError:
+        return ""
 
     matches = re.findall(r'([\d\.]+%)', status)
-    return matches[-1]
+    return "-" + matches[-1]
 
 
 def run_lsblk(*args):
