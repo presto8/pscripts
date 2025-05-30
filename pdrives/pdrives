@@ -226,7 +226,20 @@ def format_alert(d: DriveInfo) -> str:
     if d.badblocks_running is not None:
         alerts += [f"badblocks-running{d.badblocks_running}"]
 
+    if "zfs" in d.fstypes:
+        for label in d.labels.split(' '):
+            if zpool_needs_check(label):
+                alerts += ["check-zpool"]
+
     return " ".join(alerts)
+
+
+zpool_cache = {}
+def zpool_needs_check(name: str) -> str:
+    if name not in zpool_cache:
+        result = subprocess.run(["zpool", "status", "-xv", name], capture_output=True)
+        zpool_cache[name] = result.returncode != 0
+    return zpool_cache[name]
 
 
 def print_table(header: dict, data: [dict]):
