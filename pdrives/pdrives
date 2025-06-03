@@ -235,10 +235,14 @@ def format_alert(d: DriveInfo) -> str:
 
 
 zpool_cache = {}
-def zpool_needs_check(name: str) -> str:
+def zpool_needs_check(name: str) -> bool:
     if name not in zpool_cache:
-        result = subprocess.run(["zpool", "status", "-xv", name], capture_output=True)
-        zpool_cache[name] = result.returncode != 0
+        imported_pools = subprocess.run(["zpool", "list", "-o", "name", "-H"], capture_output=True, text=True)
+        if name not in imported_pools.stdout.split("\n"):
+            zpool_cache[name] = False
+        else:
+            result = subprocess.run(["zpool", "status", "-xv", name], capture_output=True)
+            zpool_cache[name] = result.returncode != 0
     return zpool_cache[name]
 
 
