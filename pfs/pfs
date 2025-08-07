@@ -426,11 +426,18 @@ class Mergerfs:
         if result.returncode != 0:
             print(f'!! action {name} failed: {result}')
 
+    def enable_linger(self):
+        "If linger is not enabled, the user will be logged out and mergerfs will exit."
+        result = run("loginctl", "enable-linger")
+        if result.returncode != 0:
+            print('!! unable to enable linger')
+
     def mount(self):
         if not self.mounted:
             self._mount_pools()
             self._mount_mergerfs()
             self.do_action('post_mount')
+            self.enable_linger()
         return self.mounted
 
     def unmount(self):
