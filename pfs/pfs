@@ -602,7 +602,7 @@ def delete_snapshots_in_range(pools, after: datetime, up_to_and_including: datet
                     print(f"zfs destroy {snapshot.name}")
                     if not pool.readonly:
                         freed_bytes += snapshot.bytes_used
-    print(f"sleep 1; ./{__file__}; exit 0")
+    print(f"sleep 1; {__file__}; exit 0")
     print(f": deleting these snapshots will free {gb(freed_bytes)}")
     print(": hint: execute above commands with: !! | sudo bash -x")
     return freed_bytes
