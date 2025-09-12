@@ -364,7 +364,7 @@ class Mergerfs:
     warn_days_without_snapshot: int | None = None
     zfs_slop: int = 5
     zfs_properties: dict[str, str] | None = None
-    actions: list[str] | None = None
+    actions: dict[str, str] | None = None
 
     def __post_init__(self):
         self._generations = None
