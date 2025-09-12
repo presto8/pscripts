@@ -365,6 +365,7 @@ class Mergerfs:
     zfs_slop: int = 5
     zfs_properties: dict[str, str] | None = None
     actions: dict[str, str] | None = None
+    mergerfs_options: dict[str, str] | None = None
 
     def __post_init__(self):
         self._generations = None
@@ -535,15 +536,16 @@ class Mergerfs:
             print("\n".join([str(x) for x in not_mounted]))
             raise SystemExit(1)
         if not self.mounted:
-            mergerfs_options = (
-                "cache.files=partial",     # programs that use mmap need this setting, like rtorrent, sqlite3, jellyfin, and many more
-                "dropcacheonclose=true",   # prevents double caching if cache.files is used
-                "category.create=mfs",     # use branch with most free space when creating files
-                "statfs_ignore=ro",        # don't include free space on readonly devices when showing total free space
-                "minfreespace=10G",        # don't create files on drives with less than this amount of free space
-                "moveonenospc=true",       # documenting for clarity, defaults to true with mfs anyway
-            )
-            opts = ",".join(mergerfs_options)
+            mergerfs_options = {
+                "cache.files": "partial",     # programs that use mmap need this setting, like rtorrent, sqlite3, jellyfin, and many more
+                "dropcacheonclose": "true",   # prevents double caching if cache.files is used
+                "category.create": "mfs",     # use branch with most free space when creating files
+                "statfs_ignore": "ro",        # don't include free space on readonly devices when showing total free space
+                "minfreespace": "10G",        # don't create files on drives with less than this amount of free space
+                "moveonenospc": "true",       # documenting for clarity, defaults to true with mfs anyway
+            }
+            mergerfs_options.update(self.mergerfs_options)
+            opts = ",".join(f"{k}={v}" for k, v in mergerfs_options.items())
             paths = ":".join(x.mountpoint_with_branchmode for x in self.pools)
             print("sudo", "mergerfs", "-o", opts, paths, self.mountpoint)
             run("sudo", "mergerfs", "-o", opts, paths, self.mountpoint)
@@ -655,6 +657,8 @@ def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
             key, val = zfsprop.split('=')
             zfs_properties[key] = val
 
+        mergerfs_options = config_to_dict(s, "mergerfs_options")
+
         actions = {}
         for key in "post_mount pre_unmount".split():
             actions[f'{key}'] = s.get(f'{key}_action', None)
@@ -668,7 +672,16 @@ def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
             zfs_slop=int(s['zfs_slop']),
             zfs_properties=zfs_properties,
             actions=actions,
+            mergerfs_options=mergerfs_options,
         )
+
+
+def config_to_dict(config_entry, key: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for entry in config_entry.get(key, '').split():
+        key, val = entry.split('=')
+        result[key] = val
+    return result
 
 
 def run(*args, **kwargs):
