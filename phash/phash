@@ -16,7 +16,7 @@ main() {
 }
 
 hashdir_path() {
-    if hash=$(get_hashes "$1" | sort | sha256sum | cut -c1-8); then
+    if hash=$(get_hashes "$1" | sort | sha256sum | cut -c1-6); then
         echo "$hash  $(realpath "$1")"
     fi
 }
