@@ -19,13 +19,23 @@ main() {
 do_action() {
     case $MODE in
         pass)
-            pass show "$ROFI_SELECTION" | head -1 | do_xclip
+            pass show "$ROFI_SELECTION" | head -1 | do_primary
             ;;
         login)
-            get_field login | do_xclip
+            get_field login | do_primary
             ;;
         otp)
-            pass otp "$ROFI_SELECTION" | do_xclip
+            pass otp "$ROFI_SELECTION" | do_primary
+            ;;
+        all)
+            # all mode copies the password to the primary clipboard and the OTP
+            # (if any) and username to the regular clipboard.
+            pass show "$ROFI_SELECTION" | head -1 | do_primary
+            if ! pass otp "$ROFI_SELECTION" 2>/dev/null | do_clipboard; then
+                :
+            fi
+            get_field login | do_clipboard
+            ;;
     esac
 }
 
@@ -35,13 +45,27 @@ process_args() {
             MODE=login ;;
         *otp*)
             MODE=otp ;;
+        *all*)
+            MODE=all ;;
         *)
             MODE=pass ;;
     esac
 }
 
-do_xclip() {
-    xclip -rmlastnl
+do_clipboard() {
+    if [[ $WAYLAND_DISPLAY ]]; then
+        wl-copy --trim-newline
+    elif [[ $DISPLAY ]]; then
+        xclip -rmlastnl
+    fi
+}
+
+do_primary() {
+    if [[ $WAYLAND_DISPLAY ]]; then
+        wl-copy --primary --trim-newline
+    elif [[ $DISPLAY ]]; then
+        xclip -rmlastnl -selection secondary
+    fi
 }
 
 get_field() {
