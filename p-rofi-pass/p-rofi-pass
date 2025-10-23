@@ -92,9 +92,17 @@ check_deps() {
 do_launcher() {
     # Runs in a subshell when used in pipeline
     if which fuzzel &>/dev/null; then
-        cmd=(fuzzel --dmenu --placeholder="search for a password")
+        cmd=(
+            fuzzel
+            --dmenu
+            --placeholder="search for a password"
+        )
     else
-        cmd=(rofi -dmenu --placeholder="search for a password")
+        cmd=(
+            rofi
+            -dmenu
+            --placeholder="search for a password"
+        )
     fi
     local -i rofi_ret=0
     ROFI_SELECTION=$(list_passwords | "${cmd[@]}") || rofi_ret=$?
