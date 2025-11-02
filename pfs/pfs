@@ -269,7 +269,8 @@ class Pool:
             "relatime": "on",
             "atime": "on",
             "compression": "lz4",
-            "xattr": "sa",
+            # can't change xattr after creating a filesystem, so not point in checking it
+            # "xattr": "sa",
             "acltype": "posix",
         }
 
