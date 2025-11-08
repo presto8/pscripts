@@ -43,7 +43,7 @@ main() {
             /etc/nixos/build boot
             ;;
         build)
-            /etc/nixos/build "$@"
+            /etc/nixos/build build
             ;;
         du)
             run_du
@@ -140,10 +140,12 @@ run_du() {
     done
 }
 
+run_limiter() { systemd-run --user --scope -p CPUQuota=50% "$@" ; }
+
 info() { echo ":: $*"; }
 die() { echo "!! $*"; exit 1; }
 
-run_sudo() { info "sudo $*" ; sudo nice "$@" ; }
-run_user() { info "$*" ; nice "$@" ; }
+run_sudo() { info "sudo $*" ; run_limiter sudo "$@" ; }
+run_user() { info "$*" ; run_limiter "$@" ; }
 
 main "$@"
