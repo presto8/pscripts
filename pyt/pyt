@@ -44,7 +44,7 @@ def get_url(url):
     else:
         args += [
             "--merge-output-format=mkv",  # Use mkv which allows unlimited metadata
-            "--write-subs",               # Save subtitles
+            "--embed-subs",               # Save subtitles in MKV file
             "--output", filename
         ]
 
