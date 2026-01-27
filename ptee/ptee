@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# ptee by Preston Hunt <me@prestonhunt.com>
+#
+# Helper script to capture output from CLI programs.
+#
+# Usage: ls -l | ptee
+
+log="out.$(date +%Y%m%d_%H%M%S)"
+while [[ -e "$log" ]]; do
+    log="out.$(date +%Y%m%d_%H%M%S_%N)"
+done
+
+tee "$log"
+echo "$log"
