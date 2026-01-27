@@ -232,6 +232,9 @@ class Pool:
 
     def import_(self):
         if not self.imported:
+            need_f_flag = "the '-f' flag" in run("zpool", "status", self.pool).stdout
+            if need_f_flag:
+                raise Fail(f"{self.pool} needs zpool import -f, run it manually then try again")
             print(f"importing {self.pool}...", end=" ", flush=True)
             return run("sudo", "zpool", "import", self.pool).returncode == 0
         return True

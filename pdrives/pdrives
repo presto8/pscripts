@@ -1,5 +1,5 @@
 #!/usr/bin/env nix
-#! nix shell nixpkgs#python3 nixpkgs#smartmontools --command python
+#! nix shell nixpkgs#python3 nixpkgs#smartmontools nixpkgs#util-linux --command python
 
 """pdrives by Preston Hunt <me@prestonhunt.com>
 
@@ -236,14 +236,10 @@ def format_alert(d: DriveInfo) -> str:
 
 
 zpool_cache = {}
-def zpool_needs_check(name: str) -> bool:
+def zpool_needs_check(name: str) -> str:
     if name not in zpool_cache:
-        imported_pools = subprocess.run(["zpool", "list", "-o", "name", "-H"], capture_output=True, text=True)
-        if name not in imported_pools.stdout.split("\n"):
-            zpool_cache[name] = False
-        else:
-            result = subprocess.run(["zpool", "status", "-xv", name], capture_output=True)
-            zpool_cache[name] = result.returncode != 0
+        result = subprocess.run(["zpool", "status", "-xv", name], capture_output=True)
+        zpool_cache[name] = result.returncode != 0
     return zpool_cache[name]
 
 

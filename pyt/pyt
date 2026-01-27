@@ -45,11 +45,19 @@ def get_url(url):
         args += [
             "--merge-output-format=mkv",  # Use mkv which allows unlimited metadata
             "--embed-subs",               # Save subtitles in MKV file
+#            "--output", "%(uploader)s [content id %(id)s]"
             "--output", filename
         ]
 
     print(args)
     subprocess.run(args)
+
+
+def get_spotify(url):
+    args = [
+        "spotdl",
+        "--proxy",
+    ]
 
 
 def run(*args):

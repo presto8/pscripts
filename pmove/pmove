@@ -10,8 +10,10 @@ Helper script to reduce risks in moving files.
   - Use simple rename
 - If destination is on a different fileystem:
   - Ensure that destination path has enough space
-  - Create hash of source path
   - Rsync files to temporary destination path
+    - If a partial temporary destination path already exists use it
+    - Else create a new one
+  - Create hash of source path and temporary destination path in parallel
   - Verify hash of temporary destination path
   - Rename temporary destination path
   - Remove source path
@@ -25,6 +27,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from threading import Thread
 from types import SimpleNamespace
 
 
@@ -113,11 +116,12 @@ def hash_and_rsync(paths):
 
     os.makedirs(tmp_path)
 
-    from_hashdir = get_nixhash(paths.from_path)
     rsync_files(paths.from_path, tmp_path)
 
+    from_hashdir = get_nixhash(paths.from_path)
     tmp_contents = os.path.join(tmp_path, paths.from_base)
     to_hashdir = get_nixhash(tmp_contents)
+
     if from_hashdir != to_hashdir:
         raise MoveFail(f"hashes do not match! {from_hashdir} != {to_hashdir}")
 
@@ -137,7 +141,7 @@ def fail_if_immut(path):
     for entry in result.stdout.split(b"\n"):
         attr, _, relpath = entry.partition(b" ")
         if b"i" in attr:
-            info("\t" + entry)
+            info("\t" + entry.decode())
             found = True
 
     if found:
