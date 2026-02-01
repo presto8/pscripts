@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
 # ptee by Preston Hunt <me@prestonhunt.com>
-#
-# Helper script to capture output from CLI programs.
+# Helper script to capture output into a log file with a unique file name.
 #
 # Usage: ls -l | ptee
+#
+# Or to capture stderr as well (bash/zsh):
+# Usage: ls -l |& ptee
 
 log="out.$(date +%Y%m%d_%H%M%S)"
 while [[ -e "$log" ]]; do
