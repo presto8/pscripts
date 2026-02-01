@@ -51,4 +51,7 @@ python.
 |https://github.com/presto8/pscripts/tree/main/ptee[ptee]
 |Helper to capture output from CLI programs to a file
 
+|https://github.com/presto8/pscripts/tree/main/psnap[psnap]
+|Helper to view and manage ZFS snapshots.
+
 |===
