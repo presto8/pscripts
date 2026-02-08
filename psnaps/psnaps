@@ -15,6 +15,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('datasets', nargs='+', help='names of datasets to process')
     parser.add_argument('--rm', default=False, action='store_true', help='remove first dataset')
+    parser.add_argument('--first', '-1', default=False, action='store_true', help='first dataset only')
     parser.add_argument('--verbose', "-v", default=False, action='store_true', help='show details')
     return parser.parse_args()
 
@@ -23,6 +24,9 @@ def main():
     datasets = []
     for dataset in ARGS.datasets:
         datasets += get_datasets(dataset)
+
+    if ARGS.first:
+        datasets = datasets[:1]
 
     if len(datasets) == 1:
         # automatic verbose mode
