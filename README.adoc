@@ -54,4 +54,7 @@ python.
 |https://github.com/presto8/pscripts/tree/main/psnaps[psnaps]
 |Helper to view and manage ZFS snapshots.
 
+|https://github.com/presto8/pscripts/tree/main/pshrink[pshrink]
+|An ffmpeg wrapper.
+
 |===

@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+
+"""
+pshrink by Preston Hunt <me@prestonhunt.com>
+https://github.com/presto8/pythonskeletonsimple
+
+An ffmpeg wrapper.
+"""
+
+import argparse
+import fcntl
+import os
+import subprocess
+import sys
+import shutil
+from pathlib import Path
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)
+
+    parser.add_argument('paths', nargs='+', help='paths to process')
+    parser.add_argument('--crf', default=27, type=int, help='target crf (default 27)')
+    parser.add_argument('--horizontal', '--vertical', '-h', '-v', default=0, type=int, help='target vertical pixels')
+    parser.add_argument('--p720', '--720p', default=False, action='store_true', help='same as --horizontal=720')
+    parser.add_argument('--p1080', '--1080p', default=False, action='store_true', help='same as --horizontal=1080')
+    parser.add_argument('--opus', default=False, action='store_true', help='encode audio to opus')
+
+    return parser.parse_args()
+
+
+def main():
+    if ARGS.p720:
+        ARGS.horizontal = 720
+
+    if ARGS.p1080:
+        ARGS.horizontal = 1080
+
+    for path in ARGS.paths:
+        if not already_done(path):
+            shrink(path)
+
+
+def already_done(path):
+    return path.endswith(".processed") or \
+        path.startswith("0,incomplete") or \
+        "pshrink" in path
+
+
+def shrink(path):
+    opts = ["-i", path]
+    slugs = []
+
+    if ARGS.horizontal:
+        # ensure resolution is a multiple of 16 for optimal codec efficiency
+        opts += ["-vf", f"scale=h={ARGS.horizontal}:force_original_aspect_ratio=decrease:force_divisible_by=16"]
+        slugs += [f"{ARGS.horizontal}p"]
+
+    opts += [
+        "-c", "copy",               # copy streams verbatim except as overriden below
+        "-c:v", "libx265",
+        "-c:s", "srt",              # ensure subs are mkv-compatible srt
+    ]
+
+    if ARGS.opus:
+        opts += ["-c:a", "libopus"]
+        slugs += ["opus"]
+
+    if ARGS.crf != 27:
+        slugs += [f"crf{ARGS.crf}"]
+
+    all_slugs = ".".join(slugs)
+    output = f"{path}.{all_slugs}.mkv"
+    temp = f"0,incomplete,{output}"
+
+    opts += (
+        "-pix_fmt", "yuv420p10le",  # convert to 10-bit x265, smaller size and higher quality
+        # -preset slow        # slow is 2-3x longer but 10-20% better quality/compression
+        "-crf", f"{ARGS.crf}",       # default is 28, lower is higher quality
+        temp
+    )
+
+    run_ffmpeg(opts)
+    run_touch(path, temp)
+    os.rename(temp, output)
+    os.rename(path, f"{path}.processed")
+
+
+def run_ffmpeg(opts):
+    if shutil.which("ffpb"):
+        exe = ["ffpb"]
+    else:
+        exe = ["ffmpeg", "-hide_banner"]
+
+    cmd = exe + opts
+    print(cmd)
+    subprocess.run(cmd)
+
+
+def run_touch(reference, target):
+    cmd = ["touch", "-r", reference, target]
+    subprocess.run(cmd)
+
+
+def run(*args):
+    return subprocess.run(args, capture_output=True, text=True)
+
+
+class Fail(Exception):
+    pass
+
+
+if __name__ == '__main__':
+    try:
+        # Command-line arguments are considered as immutable constants of the
+        # universe, and thus are globally available in this script.
+        ARGS = parse_args()
+        main()
+    except Fail as f:
+        print(*f.args, file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Ctrl+C")
