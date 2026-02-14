@@ -36,6 +36,10 @@ def main():
     if ARGS.p1080:
         ARGS.horizontal = 1080
 
+    if ARGS.crf < 0:
+        # treat this as relative to 27
+        ARGS.crf = 27 + ARGS.crf
+
     for path in ARGS.paths:
         if not already_done(path):
             shrink(path)
@@ -62,12 +66,14 @@ def shrink(path):
         "-c:s", "srt",              # ensure subs are mkv-compatible srt
     ]
 
+    if ARGS.crf != 27:
+        slugs += [f"crf{ARGS.crf}"]
+
     if ARGS.opus:
         opts += ["-c:a", "libopus"]
         slugs += ["opus"]
 
-    if ARGS.crf != 27:
-        slugs += [f"crf{ARGS.crf}"]
+    slugs += ["pshrink"]
 
     all_slugs = ".".join(slugs)
     output = f"{path}.{all_slugs}.mkv"
