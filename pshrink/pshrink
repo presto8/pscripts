@@ -21,9 +21,9 @@ def parse_args():
 
     parser.add_argument('paths', nargs='+', help='paths to process')
     parser.add_argument('--crf', default=27, type=int, help='target crf (default 27)')
-    parser.add_argument('--horizontal', '--vertical', '-h', '-v', default=0, type=int, help='target vertical pixels')
-    parser.add_argument('--p720', '--720p', default=False, action='store_true', help='same as --horizontal=720')
-    parser.add_argument('--p1080', '--1080p', default=False, action='store_true', help='same as --horizontal=1080')
+    parser.add_argument('--vertical', '-v', default=0, type=int, help='target vertical pixels')
+    parser.add_argument('--p720', '--720p', default=False, action='store_true', help='same as --veritcal=720')
+    parser.add_argument('--p1080', '--1080p', default=False, action='store_true', help='same as --vertical=1080')
     parser.add_argument('--opus', default=False, action='store_true', help='encode audio to opus')
 
     return parser.parse_args()
@@ -31,10 +31,10 @@ def parse_args():
 
 def main():
     if ARGS.p720:
-        ARGS.horizontal = 720
+        ARGS.vertical = 720
 
     if ARGS.p1080:
-        ARGS.horizontal = 1080
+        ARGS.vertical = 1080
 
     if ARGS.crf < 0:
         # treat this as relative to 27
@@ -55,10 +55,10 @@ def shrink(path):
     opts = ["-i", path]
     slugs = []
 
-    if ARGS.horizontal:
+    if ARGS.vertical:
         # ensure resolution is a multiple of 16 for optimal codec efficiency
-        opts += ["-vf", f"scale=h={ARGS.horizontal}:force_original_aspect_ratio=decrease:force_divisible_by=16"]
-        slugs += [f"{ARGS.horizontal}p"]
+        opts += ["-vf", f"scale=h={ARGS.vertical}:force_original_aspect_ratio=decrease:force_divisible_by=16"]
+        slugs += [f"{ARGS.vertical}p"]
 
     opts += [
         "-c", "copy",               # copy streams verbatim except as overriden below
