@@ -20,7 +20,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)
 
     parser.add_argument('paths', nargs='+', help='paths to process')
-    parser.add_argument('--crf', default=27, type=int, help='target crf (default 27)')
+    parser.add_argument('--crf', default=27, type=int, help='target crf (default 27) or relative -n/+n to default')
     parser.add_argument('--vertical', '-v', default=0, type=int, help='target vertical pixels')
     parser.add_argument('--p720', '--720p', default=False, action='store_true', help='same as --veritcal=720')
     parser.add_argument('--p1080', '--1080p', default=False, action='store_true', help='same as --vertical=1080')
@@ -36,8 +36,8 @@ def main():
     if ARGS.p1080:
         ARGS.vertical = 1080
 
-    if ARGS.crf < 0:
-        # treat this as relative to 27
+    if ARGS.crf < 5:
+        # treat this as relative to 27 (positive or negative)
         ARGS.crf = 27 + ARGS.crf
 
     for path in ARGS.paths:
