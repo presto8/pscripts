@@ -9,10 +9,12 @@ An ffmpeg wrapper.
 
 import argparse
 import fcntl
+import json
 import os
 import subprocess
 import sys
 import shutil
+
 from pathlib import Path
 
 
@@ -25,6 +27,7 @@ def parse_args():
     parser.add_argument('--p720', '--720p', default=False, action='store_true', help='same as --veritcal=720')
     parser.add_argument('--p1080', '--1080p', default=False, action='store_true', help='same as --vertical=1080')
     parser.add_argument('--opus', default=False, action='store_true', help='encode audio to opus')
+    parser.add_argument('--auto', default=False, action='store_true', help='max 1080p and max audio 128 kbps')
 
     return parser.parse_args()
 
@@ -41,6 +44,15 @@ def main():
         ARGS.crf = 27 + ARGS.crf
 
     for path in ARGS.paths:
+        if ARGS.auto:
+            streaminfo = get_stream_info(path)
+            if audio_br := get_audio_bitrate(streaminfo):
+                if audio_br > 130000:
+                    ARGS.opus = True
+            if wh := get_video_wh(streaminfo):
+                if wh[1] > 1080:
+                    ARGS.p1080 = True
+
         if not already_done(path):
             shrink(path)
 
@@ -101,6 +113,31 @@ def run_ffmpeg(opts):
     cmd = exe + opts
     print(cmd)
     subprocess.run(cmd)
+
+
+class StreamInfo(dict):
+    pass
+
+
+def get_stream_info(path) -> StreamInfo:
+    cmd = "ffprobe -print_format json -show_format -show_streams".split() + [path]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    j = json.loads(result.stdout)
+    return j
+
+
+def get_audio_bitrate(streaminfo: StreamInfo) -> int | None:
+    for stream in streaminfo['streams']:
+        if stream['codec_type'] == 'audio':
+            return int(stream['bit_rate'])
+    return None
+
+
+def get_video_wh(streaminfo: StreamInfo) -> tuple[int, int] | None:
+    for stream in streaminfo['streams']:
+        if stream['codec_type'] == 'video':
+            return int(stream['width']), int(stream['height'])
+    return None
 
 
 def run_touch(reference, target):
