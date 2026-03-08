@@ -79,6 +79,9 @@ def shrink(path):
         "-c:s", "srt",              # ensure subs are mkv-compatible srt
     ]
 
+    env = os.environ.copy()
+    env['FFREPORT'] = f"file=0,log,{path}.log:level=32"
+
     if ARGS.crf != 27:
         slugs += [f"crf{ARGS.crf}"]
 
