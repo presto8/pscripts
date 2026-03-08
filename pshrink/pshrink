@@ -101,13 +101,17 @@ def shrink(path):
         temp
     )
 
-    run_ffmpeg(opts)
+    if not run_ffmpeg(opts, env):
+        print(f"ffmpeg failed for: {path}")
+        return
+
     run_touch(path, temp)
     os.rename(temp, output)
     os.rename(path, f"{path}.processed")
 
 
-def run_ffmpeg(opts):
+def run_ffmpeg(opts, env) -> bool:
+    "Returns True if ffmpeg completed successfully."
     if shutil.which("ffpb"):
         exe = ["ffpb"]
     else:
@@ -115,7 +119,10 @@ def run_ffmpeg(opts):
 
     cmd = exe + opts
     print(cmd)
-    subprocess.run(cmd)
+    result = subprocess.run(cmd, env=env)
+    if result.returncode != 0:
+        print(result)
+    return result.returncode == 0
 
 
 class StreamInfo(dict):
