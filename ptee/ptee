@@ -13,6 +13,6 @@ while [[ -e "$log" ]]; do
     log="out.$(date +%Y%m%d_%H%M%S_%N)"
 done
 
-trap "echo $log" EXIT
+trap 'echo $log' EXIT
 
 tee "$log"
