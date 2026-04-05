@@ -71,7 +71,7 @@ def shrink(path):
     if ARGS.vertical:
         # ensure resolution is a multiple of 16 for optimal codec efficiency
         opts += ["-vf", f"scale=h={ARGS.vertical}:force_original_aspect_ratio=decrease:force_divisible_by=16"]
-        slugs += [f"{ARGS.vertical}p"]
+        slugs.append(f"{ARGS.vertical}p")
 
     opts += [
         "-c", "copy",               # copy streams verbatim except as overriden below
@@ -83,13 +83,13 @@ def shrink(path):
     env['FFREPORT'] = f"file=0,log,{path}.log:level=32"
 
     if ARGS.crf != 27:
-        slugs += [f"crf{ARGS.crf}"]
+        slugs.append(f"crf{ARGS.crf}")
 
     if ARGS.opus:
         opts += ["-c:a", "libopus"]
-        slugs += ["opus"]
+        slugs.append("opus")
 
-    slugs += ["pshrink"]
+    slugs.append("pshrink")
 
     all_slugs = ".".join(slugs)
     output = f"{path}.{all_slugs}.mkv"
