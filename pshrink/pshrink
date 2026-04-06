@@ -86,6 +86,8 @@ def shrink(path):
         slugs.append(f"crf{ARGS.crf}")
 
     if ARGS.opus:
+        opts += ["-map", "0"]  # trancode all audio tracks
+        opts += ["-ac", "2"]  # downmix to 2 channels maximum
         opts += ["-c:a", "libopus"]
         slugs.append("opus")
 
