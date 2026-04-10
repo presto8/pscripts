@@ -127,8 +127,33 @@ class VideoInfoHandler(InfoHandler):
         return result
 
 
+class DirectoryInfoHandler(InfoHandler):
+    def showinfo(self, path: Path):
+        self.path = path
+
+        if not path.is_dir():
+            raise InfoHandlerError()
+
+        if path.is_symlink():
+            raise InfoHandlerError()
+
+        size = 0
+        items = 0
+        files = 0
+        subdirs = 0
+        for item in path.rglob("*"):
+            items += 1
+            if item.is_dir() and not item.is_symlink():
+                subdirs += 1
+            else:
+                files += 1
+            size += item.stat().st_size
+        self.print(f"directory: {files:>5} files {subdirs:>5} subdirs {size:>15,} bytes")
+
+
 HANDLERS = [
     VideoInfoHandler,
+    DirectoryInfoHandler,
 ]
 
 
