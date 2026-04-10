@@ -152,9 +152,19 @@ class DirectoryInfoHandler(InfoHandler):
         self.print(f"directory: {files:>5} files {subdirs:>5} subdirs {size:>15,} bytes")
 
 
+class FallbackInfoHandler(InfoHandler):
+    """If nothing else matches, use the `file` program to show basic information about the file."""
+    def showinfo(self, path: Path):
+        self.path = path
+
+        result = subprocess.run(["file", "--brief", path.name], capture_output=True, text=True)
+        self.print(result.stdout.strip())
+
+
 HANDLERS = [
     VideoInfoHandler,
     DirectoryInfoHandler,
+    FallbackInfoHandler
 ]
 
 
