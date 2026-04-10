@@ -1,0 +1,163 @@
+#!/usr/bin/env python
+
+"""
+pinfo by Preston Hunt <me@prestonhunt.com>
+https://github.com/presto8/pythonskeletonsimple
+
+Provide information about files, similar to the `file` program but more detailed.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import shutil
+import json
+
+from pathlib import Path
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)
+
+    parser.add_argument('paths', nargs='+', help='paths to process')
+
+    return parser.parse_args()
+
+
+def get_longest_string_length(strings: list[str]) -> int:
+    return max(len(s) for s in strings)
+
+
+def main():
+    global MAX_PATH_LENGTH
+    MAX_PATH_LENGTH = get_longest_string_length(str(path) for path in ARGS.paths)
+
+    for path in ARGS.paths:
+        showinfo(Path(path))
+
+
+class InfoHandlerError(Exception):
+    pass
+
+
+class InfoHandler:
+    """Abstract base class for handling different file types. Subclasses should
+    implement the `showinfo` method. If the file type is not supported, the
+    `showinfo` method should raise an `InfoHandlerError` exception."""
+
+    def showinfo(self, path: Path):
+        "Override this method to show information about the file at `path`."
+        raise InfoHandlerError()
+
+    def print(self, *args, **kwargs):
+        path_fmt = f"{self.path.name:<{MAX_PATH_LENGTH}}"
+        print(path_fmt, *args, **kwargs)
+
+
+class StreamInfo(dict):
+    pass
+
+
+class VideoInfoHandler(InfoHandler):
+    def showinfo(self, path: Path):
+        self.path = path
+
+        extensions = ".mp4 .mkv .avi".split()
+        if path.suffix.lower() not in extensions:
+            raise InfoHandlerError()
+
+        streaminfo = self.get_stream_info(path)
+        parts = []
+
+        if codec := self.get_video_codec(streaminfo):
+            parts.append(codec)
+
+        if wh := self.get_video_wh(streaminfo):
+            wh_fmt = f"{wh[0]}x{wh[1]}"
+            parts.append(wh_fmt)
+
+        if bitrate := self.get_audio_bitrate(streaminfo):
+            bitrate_fmt = f"{bitrate // 1000} kbps"
+            parts.append(bitrate_fmt)
+
+        if parts:
+            self.print(*parts)
+            return
+
+        raise InfoHandlerError()
+
+    @staticmethod
+    def get_stream_info(path) -> StreamInfo:
+        cmd = "ffprobe -print_format json -show_format -show_streams".split() + [path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return json.loads(result.stdout)
+
+    @staticmethod
+    def get_audio_bitrate(streaminfo: StreamInfo) -> int | None:
+        result = None
+        for stream in streaminfo['streams']:
+            if stream['codec_type'] == 'audio':
+                if result is not None:
+                    raise InfoHandlerError("multiple audio streams not supported")
+                result = int(stream['bit_rate'])
+        return result
+
+    @staticmethod
+    def get_video_wh(streaminfo: StreamInfo) -> tuple[int, int] | None:
+        result = None
+        for stream in streaminfo['streams']:
+            if stream['codec_type'] == 'video':
+                if result is not None:
+                    raise InfoHandlerError("multiple video streams not supported")
+                result = int(stream['width']), int(stream['height'])
+        return result
+
+    @staticmethod
+    def get_video_codec(streaminfo: StreamInfo) -> str | None:
+        result = None
+        for stream in streaminfo['streams']:
+            if stream['codec_type'] == 'video':
+                if result is not None:
+                    raise InfoHandlerError("multiple video streams not supported")
+                codec = stream['codec_name']
+                profile = stream['profile']
+                return f"{codec} ({profile})"
+        return result
+
+
+HANDLERS = [
+    VideoInfoHandler,
+]
+
+
+def showinfo(path: Path):
+    for handler in HANDLERS:
+        try:
+            handler().showinfo(path)
+            return
+        except InfoHandlerError:
+            continue
+    print("unhandled:", path)
+
+
+def run(*args):
+    return subprocess.run(args, capture_output=True, text=True)
+
+
+class Fail(Exception):
+    pass
+
+
+if __name__ == '__main__':
+    try:
+        # Command-line arguments are considered as immutable constants of the
+        # universe, and thus are globally available in this script.
+        ARGS = parse_args()
+        main()
+    except Fail as f:
+        print(*f.args, file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Ctrl+C")
