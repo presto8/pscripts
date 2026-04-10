@@ -52,7 +52,7 @@ class InfoHandler:
         raise InfoHandlerError()
 
     def print(self, *args, **kwargs):
-        path_fmt = f"{self.path.name:<{MAX_PATH_LENGTH}}"
+        path_fmt = f"{self.path.name:<{MAX_PATH_LENGTH}} "
         print(path_fmt, *args, **kwargs)
 
 
@@ -64,7 +64,7 @@ class VideoInfoHandler(InfoHandler):
     def showinfo(self, path: Path):
         self.path = path
 
-        extensions = ".mp4 .mkv .avi".split()
+        extensions = ".mp4 .mkv .avi .wmv".split()
         if path.suffix.lower() not in extensions:
             raise InfoHandlerError()
 
@@ -72,7 +72,7 @@ class VideoInfoHandler(InfoHandler):
         parts = []
 
         if codec := self.get_video_codec(streaminfo):
-            parts.append(codec)
+            parts.append(f"{codec:<12}")
 
         if wh := self.get_video_wh(streaminfo):
             wh_fmt = f"{wh[0]}x{wh[1]}"
@@ -121,9 +121,10 @@ class VideoInfoHandler(InfoHandler):
             if stream['codec_type'] == 'video':
                 if result is not None:
                     raise InfoHandlerError("multiple video streams not supported")
-                codec = stream['codec_name']
-                profile = stream['profile']
-                return f"{codec} ({profile})"
+                parts = [stream['codec_name']]
+                if profile := stream.get('profile', None):
+                    parts.append(f"({profile})")
+                return " ".join(parts)
         return result
 
 
