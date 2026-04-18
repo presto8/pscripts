@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument('--opus', default=False, action='store_true', help='encode audio to opus')
     parser.add_argument('--auto', default=False, action='store_true', help='max 1080p and max audio 128 kbps')
     parser.add_argument('--slow', default=False, action='store_true', help='use -preset slow, 2-3x longer, 10-20% better quality/compression')
+    parser.add_argument('--srt', default=False, action='store_true', help='convert subtitles to srt for mkv compatibilty')
 
     return parser.parse_args()
 
@@ -74,10 +75,15 @@ def shrink(path):
         slugs.append(f"{ARGS.vertical}p")
 
     opts += [
+        "-map", "0",                # copy all streams by default, but allow codec changes below to override this
         "-c", "copy",               # copy streams verbatim except as overriden below
         "-c:v", "libx265",
-        "-c:s", "srt",              # ensure subs are mkv-compatible srt
+        "-pix_fmt", "yuv420p10le",   # convert to 10-bit x265, smaller size and higher quality, less compatibility
+        "-crf", f"{ARGS.crf}",       # default is 28, lower is higher quality
     ]
+
+    if ARGS.srt:
+        opts += ["-c:s", "srt"]     # convert subs to srt for mkv compatibilty
 
     env = os.environ.copy()
     env['FFREPORT'] = f"file=0,log,{path}.log:level=32"
@@ -86,9 +92,8 @@ def shrink(path):
         slugs.append(f"crf{ARGS.crf}")
 
     if ARGS.opus:
-        opts += ["-map", "0"]  # trancode all audio tracks
-        opts += ["-ac", "2"]  # downmix to 2 channels maximum
         opts += ["-c:a", "libopus"]
+        # opts += ["-ac", "2"]  # downmix to 2 channels maximum
         slugs.append("opus")
 
     slugs.append("pshrink")
@@ -100,11 +105,9 @@ def shrink(path):
     if ARGS.slow:
         opts += ["-preset", "slow"]
 
-    opts += (
-        "-pix_fmt", "yuv420p10le",   # convert to 10-bit x265, smaller size and higher quality, less compatibility
-        "-crf", f"{ARGS.crf}",       # default is 28, lower is higher quality
-        temp
-    )
+    opts += ["-metadata", "comment=original_filename=" + os.path.basename(path)]
+
+    opts += [temp]
 
     if not run_ffmpeg(opts, env):
         print(f"ffmpeg failed for: {path}")
