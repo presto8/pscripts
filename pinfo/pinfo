@@ -71,16 +71,16 @@ class VideoInfoHandler(InfoHandler):
         streaminfo = self.get_stream_info(path)
         parts = []
 
-        if codec := self.get_video_codec(streaminfo):
-            parts.append(f"{codec:<12}")
-
         if wh := self.get_video_wh(streaminfo):
             wh_fmt = f"{wh[0]}x{wh[1]}"
-            parts.append(wh_fmt)
+            parts.append(f"{wh_fmt:>9}")
 
         if bitrate := self.get_audio_bitrate(streaminfo):
-            bitrate_fmt = f"{bitrate // 1000} kbps"
-            parts.append(bitrate_fmt)
+            bitrate_fmt = f"{bitrate // 1000}k"
+            parts.append(f"{bitrate_fmt:>8}")
+
+        if codec := self.get_video_codec(streaminfo):
+            parts.append(f"{codec:<12}")
 
         if parts:
             self.print(*parts)
@@ -101,7 +101,10 @@ class VideoInfoHandler(InfoHandler):
             if stream['codec_type'] == 'audio':
                 if result is not None:
                     raise InfoHandlerError("multiple audio streams not supported")
-                result = int(stream['bit_rate'])
+                try:
+                    result = int(stream['bit_rate'])
+                except KeyError:
+                    continue
         return result
 
     @staticmethod
