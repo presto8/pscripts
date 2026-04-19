@@ -105,8 +105,7 @@ def shrink(path):
     if ARGS.slow:
         opts += ["-preset", "slow"]
 
-    opts += ["-metadata", "comment=original_filename=" + os.path.basename(path)]
-
+    opts += ["-metadata", f"ffmpeg_options={opts}"]
     opts += [temp]
 
     if not run_ffmpeg(opts, env):
