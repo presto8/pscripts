@@ -88,7 +88,7 @@ main() {
             wait
             ;;
         vi|edit)
-            sudo vi /etc/nixos/"$HOSTNAME"/default.nix
+            vi /etc/nixos/"$HOSTNAME"/default.nix
             ;;
     esac
 
