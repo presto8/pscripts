@@ -113,6 +113,7 @@ def shrink(path):
 
     opts += ["-metadata", f"ffmpeg_options={opts}"]
     opts += [temp]
+    opts += ["-y"]  # overwrite output without asking, since we use a unique temp name based on options
 
     if not run_ffmpeg(opts, env):
         print(f"ffmpeg failed for: {path}")
