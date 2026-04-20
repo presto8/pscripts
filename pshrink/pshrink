@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument('--slow', default=False, action='store_true', help='use -preset slow, 2-3x longer, 10-20% better quality/compression')
     parser.add_argument('--srt', default=False, action='store_true', help='convert subtitles to srt for mkv compatibilty')
     parser.add_argument('--mp4', default=False, action='store_true', help='use mp4 container instead of mkv')
+    parser.add_argument('--drop-data', default=False, action='store_true', help='drop data track')
 
     return parser.parse_args()
 
@@ -82,6 +83,9 @@ def shrink(path):
         "-pix_fmt", "yuv420p10le",   # convert to 10-bit x265, smaller size and higher quality, less compatibility
         "-crf", f"{ARGS.crf}",       # default is 28, lower is higher quality
     ]
+
+    if ARGS.drop_data:
+        opts += ["-map", "-0:d"]    # drop data track
 
     if ARGS.srt:
         opts += ["-c:s", "srt"]     # convert subs to srt for mkv compatibilty
