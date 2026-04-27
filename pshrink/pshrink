@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument('--slow', default=False, action='store_true', help='use -preset slow, 2-3x longer, 10-20% better quality/compression')
     parser.add_argument('--srt', default=False, action='store_true', help='convert subtitles to srt for mkv compatibilty')
     parser.add_argument('--mp4', default=False, action='store_true', help='use mp4 container instead of mkv')
-    parser.add_argument('--drop-data', default=False, action='store_true', help='drop data track')
+    parser.add_argument('--drop', default=0, type=int, help='drop stream')
 
     return parser.parse_args()
 
@@ -84,8 +84,8 @@ def shrink(path):
         "-crf", f"{ARGS.crf}",       # default is 28, lower is higher quality
     ]
 
-    if ARGS.drop_data:
-        opts += ["-map", "-0:d"]    # drop data track
+    if ARGS.drop:
+        opts += ["-map", f"-0:{ARGS.drop}"]    # drop data track
 
     if ARGS.srt:
         opts += ["-c:s", "srt"]     # convert subs to srt for mkv compatibilty
