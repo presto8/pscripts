@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 import shutil
+import shlex
 
 from pathlib import Path
 
@@ -32,6 +33,7 @@ def parse_args():
     parser.add_argument('--srt', default=False, action='store_true', help='convert subtitles to srt for mkv compatibilty')
     parser.add_argument('--mp4', default=False, action='store_true', help='use mp4 container instead of mkv')
     parser.add_argument('--drop', default=0, type=int, help='drop stream')
+    parser.add_argument('--script', default=False, action='store_true', help='create script instead of running ffmpeg')
 
     return parser.parse_args()
 
@@ -114,6 +116,16 @@ def shrink(path):
     opts += ["-metadata", f"ffmpeg_options={opts}"]
     opts += [temp]
     opts += ["-y"]  # overwrite output without asking, since we use a unique temp name based on options
+
+    if ARGS.script:
+        script_name = f"{path}.pshrink.sh"
+        escaped = [shlex.quote(opt) for opt in opts]
+        with open(script_name, "w") as f:
+            f.write("#!/usr/bin/env bash\n\n")
+            f.write("ffmpeg ")
+            f.write(" ".join(escaped) + "\n")
+        print(f"Script written to {script_name}")
+        return
 
     if not run_ffmpeg(opts, env):
         print(f"ffmpeg failed for: {path}")
