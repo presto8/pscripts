@@ -9,11 +9,8 @@ Provide information about files, similar to the `file` program but more detailed
 
 import argparse
 import json
-import os
 import subprocess
 import sys
-import shutil
-import json
 
 from pathlib import Path
 
@@ -64,23 +61,18 @@ class VideoInfoHandler(InfoHandler):
     def showinfo(self, path: Path):
         self.path = path
 
-        extensions = ".mp4 .mkv .avi .wmv".split()
+        extensions = ".mp4 .mkv .avi .wmv .mov .vob".split()
         if path.suffix.lower() not in extensions:
             raise InfoHandlerError()
 
         streaminfo = self.get_stream_info(path)
         parts = []
 
-        if wh := self.get_video_wh(streaminfo):
-            wh_fmt = f"{wh[0]}x{wh[1]}"
-            parts.append(f"{wh_fmt:>9}")
+        for video_info in self.get_video_info(streaminfo):
+            parts += [f"{video_info},"]
 
-        if bitrate := self.get_audio_bitrate(streaminfo):
-            bitrate_fmt = f"{bitrate // 1000}k"
-            parts.append(f"{bitrate_fmt:>8}")
-
-        if codec := self.get_video_codec(streaminfo):
-            parts.append(f"{codec:<12}")
+        for audio_info in self.get_audio_info(streaminfo):
+            parts += [audio_info]
 
         if parts:
             self.print(*parts)
@@ -95,40 +87,29 @@ class VideoInfoHandler(InfoHandler):
         return json.loads(result.stdout)
 
     @staticmethod
-    def get_audio_bitrate(streaminfo: StreamInfo) -> int | None:
-        result = None
+    def get_audio_info(streaminfo: StreamInfo):
         for stream in streaminfo['streams']:
             if stream['codec_type'] == 'audio':
-                if result is not None:
-                    raise InfoHandlerError("multiple audio streams not supported")
+                parts = [stream['codec_name']]
                 try:
                     result = int(stream['bit_rate'])
                 except KeyError:
                     continue
-        return result
+                parts += [f"{result // 1000}k"]
+                yield " ".join(parts)
 
     @staticmethod
-    def get_video_wh(streaminfo: StreamInfo) -> tuple[int, int] | None:
-        result = None
+    def get_video_info(streaminfo: StreamInfo):
         for stream in streaminfo['streams']:
             if stream['codec_type'] == 'video':
-                if result is not None:
-                    raise InfoHandlerError("multiple video streams not supported")
-                result = int(stream['width']), int(stream['height'])
-        return result
-
-    @staticmethod
-    def get_video_codec(streaminfo: StreamInfo) -> str | None:
-        result = None
-        for stream in streaminfo['streams']:
-            if stream['codec_type'] == 'video':
-                if result is not None:
-                    raise InfoHandlerError("multiple video streams not supported")
+                # print(stream)
                 parts = [stream['codec_name']]
                 if profile := stream.get('profile', None):
-                    parts.append(f"({profile})")
-                return " ".join(parts)
-        return result
+                    parts += [f"({profile})"]
+                parts += [f"{stream['width']}x{stream['height']}"]
+                if bit_rate := stream.get('bit_rate', None):
+                    parts += [f"{int(bit_rate) // 1000}k"]
+                yield " ".join(parts)
 
 
 class DirectoryInfoHandler(InfoHandler):
