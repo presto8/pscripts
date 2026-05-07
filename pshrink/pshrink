@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument('--p720', '--720p', default=False, action='store_true', help='same as --veritcal=720')
     parser.add_argument('--p1080', '--1080p', default=False, action='store_true', help='same as --vertical=1080')
     parser.add_argument('--opus', default=False, action='store_true', help='encode audio to opus')
-    parser.add_argument('--auto', default=False, action='store_true', help='max 1080p and max audio 128 kbps')
+    parser.add_argument('--auto', default=False, action='store_true', help='max 1080p and opus if audio >= 100 kbps')
     parser.add_argument('--slow', default=False, action='store_true', help='use -preset slow, 2-3x longer, 10-20% better quality/compression')
     parser.add_argument('--srt', default=False, action='store_true', help='convert subtitles to srt for mkv compatibilty')
     parser.add_argument('--mp4', default=False, action='store_true', help='use mp4 container instead of mkv')
@@ -53,7 +53,7 @@ def main():
         if ARGS.auto:
             streaminfo = get_stream_info(path)
             if audio_br := get_audio_bitrate(streaminfo):
-                if audio_br > 130000:
+                if audio_br > 100000:
                     ARGS.opus = True
             if wh := get_video_wh(streaminfo):
                 if wh[1] > 1080:
