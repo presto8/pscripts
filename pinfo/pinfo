@@ -91,11 +91,8 @@ class VideoInfoHandler(InfoHandler):
         for stream in streaminfo['streams']:
             if stream['codec_type'] == 'audio':
                 parts = [stream['codec_name']]
-                try:
-                    result = int(stream['bit_rate'])
-                except KeyError:
-                    continue
-                parts += [f"{result // 1000}k"]
+                if bit_rate := int(stream.get('bit_rate', 0)):
+                    parts += [f"{bit_rate // 1000}k"]
                 yield " ".join(parts)
 
     @staticmethod
