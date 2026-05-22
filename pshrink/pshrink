@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument('--mp4', default=False, action='store_true', help='use mp4 container instead of mkv')
     parser.add_argument('--drop', default=0, type=int, help='drop stream')
     parser.add_argument('--script', default=False, action='store_true', help='create script instead of running ffmpeg')
+    parser.add_argument('--stereo', default=False, action='store_true', help="force stereo audio (downmix if more channels)")
 
     return parser.parse_args()
 
@@ -91,6 +92,9 @@ def shrink(path):
 
     if ARGS.srt:
         opts += ["-c:s", "srt"]     # convert subs to srt for mkv compatibilty
+
+    if ARGS.stereo:
+        opts += ["-ac", "2"]        # downmix to stereo if more channels
 
     env = os.environ.copy()
     env['FFREPORT'] = f"file=0,log,{path}.log:level=32"
