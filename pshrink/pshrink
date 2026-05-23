@@ -169,7 +169,10 @@ def get_stream_info(path) -> StreamInfo:
 def get_audio_bitrate(streaminfo: StreamInfo) -> int | None:
     for stream in streaminfo['streams']:
         if stream['codec_type'] == 'audio':
-            return int(stream['bit_rate'])
+            try:
+                return int(stream['bit_rate'])
+            except KeyError:
+                pass
     return None
 
 
