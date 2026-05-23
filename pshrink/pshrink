@@ -58,7 +58,7 @@ def main():
                     ARGS.opus = True
             if wh := get_video_wh(streaminfo):
                 if wh[1] > 1080:
-                    ARGS.p1080 = True
+                    ARGS.vertical = 1080
 
         if not already_done(path):
             shrink(path)
