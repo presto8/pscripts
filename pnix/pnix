@@ -109,8 +109,6 @@ do_rm_auto() {
         local id=$(echo $hmgen | awk '{ print $5 }')
         run_user home-manager remove-generations "$id"
     done
-
-    exit 99
 }
 
 random_check_for_old_generations() {
