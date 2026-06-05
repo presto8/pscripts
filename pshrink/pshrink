@@ -16,8 +16,6 @@ import sys
 import shutil
 import shlex
 
-from pathlib import Path
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)
@@ -70,7 +68,10 @@ def already_done(path):
         "pshrink" in path
 
 
-def shrink(path):
+def shrink(path: str):
+    dirname = os.path.dirname(path) or "."
+    basename = os.path.basename(path)
+
     opts = ["-i", path]
     slugs = []
 
@@ -97,7 +98,7 @@ def shrink(path):
         opts += ["-ac", "2"]        # downmix to stereo if more channels
 
     env = os.environ.copy()
-    env['FFREPORT'] = f"file=0,log,{path}.log:level=32"
+    env['FFREPORT'] = f"file={dirname}/0,log,{basename}.log:level=32"
 
     if ARGS.crf != 27:
         slugs.append(f"crf{ARGS.crf}")
@@ -111,8 +112,8 @@ def shrink(path):
 
     all_slugs = ".".join(slugs)
     ext = "mp4" if ARGS.mp4 else "mkv"
-    output = f"{path}.{all_slugs}.{ext}"
-    temp = f"0,incomplete,{output}"
+    output = f"{dirname}/{basename}.{all_slugs}.{ext}"
+    temp = f"{dirname}/0,incomplete,{basename}"
 
     if ARGS.slow:
         opts += ["-preset", "slow"]
