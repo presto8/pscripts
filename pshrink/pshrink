@@ -51,10 +51,11 @@ def main():
     for path in ARGS.paths:
         if ARGS.auto:
             streaminfo = get_stream_info(path)
-            if audio_br := get_audio_bitrate(streaminfo):
+            streams = streaminfo.get('streams', [])
+            if audio_br := get_audio_bitrate(streams):
                 if audio_br > 110000:
                     ARGS.opus = True
-            if wh := get_video_wh(streaminfo):
+            if wh := get_video_wh(streams):
                 if wh[1] > 1080:
                     ARGS.vertical = 1080
 
@@ -168,8 +169,8 @@ def get_stream_info(path) -> StreamInfo:
     return j
 
 
-def get_audio_bitrate(streaminfo: StreamInfo) -> int | None:
-    for stream in streaminfo['streams']:
+def get_audio_bitrate(streams) -> int | None:
+    for stream in streams:
         if stream['codec_type'] == 'audio':
             try:
                 return int(stream['bit_rate'])
@@ -178,8 +179,8 @@ def get_audio_bitrate(streaminfo: StreamInfo) -> int | None:
     return None
 
 
-def get_video_wh(streaminfo: StreamInfo) -> tuple[int, int] | None:
-    for stream in streaminfo['streams']:
+def get_video_wh(streams) -> tuple[int, int] | None:
+    for stream in streams:
         if stream['codec_type'] == 'video':
             return int(stream['width']), int(stream['height'])
     return None
