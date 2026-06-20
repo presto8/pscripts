@@ -115,7 +115,8 @@ def shrink(path: str):
     all_slugs = ".".join(slugs)
     ext = "mp4" if ARGS.mp4 else "mkv"
     output = f"{dirname}/{basename}.{all_slugs}.{ext}"
-    temp = f"{dirname}/0,incomplete,{basename}"
+    # Use .mkv for temp file otherwise the original container format will be used
+    temp = f"{dirname}/0,incomplete,{basename}.mkv"
 
     if ARGS.slow:
         opts += ["-preset", "slow"]
