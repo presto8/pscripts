@@ -90,7 +90,6 @@ def shrink(path: str):
     ]
 
     for stream in ARGS.drop:
-        print(stream, type(stream))
         opts += ["-map", f"-0:{stream}"]
 
     if ARGS.srt:
