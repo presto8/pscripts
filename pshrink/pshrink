@@ -168,7 +168,7 @@ class StreamInfo(dict):
 
 def get_stream_info(path) -> StreamInfo:
     cmd = "ffprobe -print_format json -show_format -show_streams".split() + [path]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True)
     j = json.loads(result.stdout)
     return j
 
