@@ -15,6 +15,7 @@ import subprocess
 import sys
 import shutil
 import shlex
+import time
 
 
 def parse_args():
@@ -33,11 +34,15 @@ def parse_args():
     parser.add_argument('--drop', default=[], action='append', type=int, help="drop streams, e.g. --drop 2 --drop 3")
     parser.add_argument('--script', default=False, action='store_true', help='create script instead of running ffmpeg')
     parser.add_argument('--stereo', default=False, action='store_true', help="force stereo audio (downmix if more channels)")
+    parser.add_argument('--idle', default=False, action='store_true', help='wait for 15 continuous minutes without other pshrink or ffmpeg processes before starting')
 
     return parser.parse_args()
 
 
 def main():
+    if ARGS.idle:
+        wait_until_idle()
+
     if ARGS.p720:
         ARGS.vertical = 720
 
@@ -65,6 +70,62 @@ def main():
 
         if not already_done(path):
             shrink(path)
+
+
+def other_tasks_running() -> bool:
+    """Check Linux's process list, excluding this pshrink process."""
+    task_names = {'pshrink', 'pshrink.parallel', 'ffmpeg'}
+    own_pid = os.getpid()
+    with os.scandir('/proc') as processes:
+        for process in processes:
+            if not process.name.isdigit() or int(process.name) == own_pid:
+                continue
+            try:
+                with open(f'{process.path}/stat') as f:
+                    stat = f.read()
+                # The command name can contain spaces and parentheses.
+                end = stat.rindex(')')
+                name = stat[stat.index('(') + 1:end]
+                if stat[end + 2:].split()[0] in {'Z', 'X'}:
+                    continue
+                if name in task_names:
+                    return True
+                with open(f'{process.path}/cmdline', 'rb') as f:
+                    args = f.read().split(b'\0')
+                executable = os.path.basename(os.fsdecode(args[0]))
+                if executable in task_names:
+                    return True
+                # Python scripts usually appear as "python /path/to/pshrink".
+                if executable.startswith(('python', 'pypy')):
+                    for arg in args[1:]:
+                        arg = os.fsdecode(arg)
+                        if arg in {'-c', '-m'}:
+                            break
+                        if arg and not arg.startswith('-'):
+                            if os.path.basename(arg) in task_names:
+                                return True
+                            break
+            except (FileNotFoundError, ProcessLookupError, PermissionError):
+                # Processes may exit while their details are being read.
+                continue
+    return False
+
+
+def wait_until_idle():
+    """Require a full quiet window observed after this invocation starts."""
+    quiet_seconds = 15 * 60
+    quiet_since = time.monotonic()
+    print('Waiting for 15 minutes without other pshrink or ffmpeg tasks...', flush=True)
+    while True:
+        busy = other_tasks_running()
+        now = time.monotonic()
+        if busy:
+            quiet_since = now
+        remaining = quiet_seconds - (now - quiet_since)
+        if remaining <= 0:
+            print('Idle period complete; starting pshrink.', flush=True)
+            return
+        time.sleep(min(1, remaining))
 
 
 def already_done(path):
