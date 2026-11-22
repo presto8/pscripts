@@ -190,6 +190,10 @@ class Pool:
 
     def __post_init__(self) -> None:
         self.snapshots: list[Snapshot] = []
+        if self.branchmode:
+            self.branchmode = self.branchmode.upper()
+            if self.branchmode not in "RW RO NC".split():
+                raise Fail("branchmode must be RW, RO, or NC")
         total, used, free, unavail = 0, 0, 0, 0
         if self.mounted:
             total, used, free = shutil.disk_usage(self.mountpoint)
@@ -223,7 +227,7 @@ class Pool:
 
     @property
     def readonly(self):
-        return self.branchmode in "ro nc".split()
+        return self.branchmode in "RO NC".split()
 
     @property
     def imported(self):
@@ -647,13 +651,7 @@ def config_to_mergerfs(config) -> Generator[Mergerfs, None, None]:
         for poolspec in s['pools'].split():
             first, sep, branchmode = poolspec.partition('=')
             poolname, sep, dataset = first.partition('/')
-            pool = Pool(pool=poolname)
-            if dataset:
-                pool.dataset = dataset
-            if branchmode:
-                if branchmode not in "RW RO NC".split():
-                    raise Fail("branchmode must be rw, ro, or nc")
-                pool.branchmode = branchmode
+            pool = Pool(pool=poolname, branchmode=branchmode, dataset=dataset)
             pools.append(pool)
 
         zfs_properties = config_to_dict(s, "zfs_properties")
